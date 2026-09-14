@@ -185,10 +185,8 @@ The rig is drawn at real sizes, taking the fly as 3 mm with its wings folded:
 - a 3 mm tube
 - a 130 mm box-mod vape
 
-A size menu offers two vapes. "Vape a bit smaller than the fly" is the
-default: a box mod 0.8 times the fly's length, standing beside it. "Real vape size" is the
-130 mm version. A view menu switches between a close-up on the fly and the
-whole rig. The page uses Big Shoulders Display for the title and big numbers, Public Sans for text and Martian Mono for readouts.
+The page has no view, size or colour menus. It always shows a crimson box mod
+0.8 times the fly's length, standing beside it, from the side. The page uses Big Shoulders Display for the title and big numbers, Public Sans for text and Martian Mono for readouts.
 
 The rig is sized from the drawn fly, which is taken as 3 mm from the front of
 the head to the tip of the abdomen. The fly is then drawn 2.5 times larger

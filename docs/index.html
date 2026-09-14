@@ -251,33 +251,6 @@ details dd { margin: 2px 0 0; max-width: 62ch; }
         <button class="chip" id="ch-dmg" data-ch="dmg" aria-pressed="true"><i class="sw amber"></i>Damaged</button>
         <button class="chip" id="ch-dead" data-ch="dead" aria-pressed="true"><i class="sw pi"></i>Dead</button>
       </div>
-      <div class="group">
-        <label class="group-label" for="region">Show</label>
-        <select class="region" id="region">
-          <option value="0">Whole nervous system</option>
-          <option value="3">Mushroom body (learning)</option>
-          <option value="8">Smell receptors</option>
-          <option value="4">Descending neurons</option>
-          <option value="16">The 10 walking neurons</option>
-          <option value="32">Dopamine neurons</option>
-        </select>
-        <button class="chip" id="ch-rig" data-ch="rig" aria-pressed="true"><i class="sw rig"></i>Rig</button>
-        <select class="region" id="view" aria-label="Camera view">
-          <option value="side">Side view</option>
-          <option value="fly">Close-up on the fly</option>
-          <option value="rig">Whole rig</option>
-        </select>
-        <select class="region" id="scale" aria-label="Vape size">
-          <option value="same">Vape a bit smaller than the fly</option>
-          <option value="real">Real vape size</option>
-        </select>
-        <select class="region" id="vape-colour" aria-label="Vape colour">
-          <option value="lagoon">Lagoon vape</option>
-          <option value="crimson">Crimson vape</option>
-          <option value="gunmetal">Gunmetal vape</option>
-          <option value="blush">Blush vape</option>
-        </select>
-      </div>
     </div>
     <div class="loading" id="loading">Loading 165,122 neurons&hellip;</div>
   </section>
@@ -568,7 +541,6 @@ function setFocus(maskBits) {
   uniforms.uSize.value = (maskBits === BIT.walk ? 16 : maskBits ? 5.2 : 4.2) * pointBoost;
   geom.attributes.aFocus.needsUpdate = true;
 }
-$("region").addEventListener("change", (e) => setFocus(+e.target.value));
 for (const b of document.querySelectorAll(".chip")) {
   b.addEventListener("click", () => {
     const on = b.getAttribute("aria-pressed") !== "true";
@@ -790,7 +762,7 @@ function buildRig(A) {
   rig.vH = vH; rig.tubeR = vH * 0.016; rig.headRx = headR.x;
   plumb(nozzleBase, nozzleTip);
   rig.vape = vape;
-  setColourway($("vape-colour").value);
+  setColourway("crimson");
   rig.vapeLabel = vape.group.localToWorld(V3(vH * 0.2, vH * 0.28, 0));
   addLabel("vape", rig.vapeLabel);
   rig.nozzleLabel = nozzleBase.clone().lerp(nozzleTip, 0.3).add(V3(0, -headR.x * 0.5, 0));
@@ -923,9 +895,6 @@ function drawVapeScreen(v, puffs, firing) {
   x.fillStyle = firing ? "#ffd36b" : "#4cc58a"; x.fillRect(w / 2 - 31, 237, 40, 16);
   v.screenTex.needsUpdate = true;
 }
-$("vape-colour").addEventListener("change", (e) => setColourway(e.target.value));
-$("view").addEventListener("change", (e) => frameRig(e.target.value, true));
-$("scale").addEventListener("change", (e) => { applyVapeScale(e.target.value); frameRig(rig.view, true); });
 
 // ---------------------------------------------------------------- downloaded models, used when present
 // A reduced vape GLB may sit next to the replay as vape_model.bin (build/models/ for the live
@@ -962,7 +931,6 @@ async function loadModels() {
     holder.scale.setScalar(v.top / Math.max(1e-6, m.size.y));
     for (const c of [...v.group.children]) c.visible = false;
     v.group.add(holder);
-    $("vape-colour").hidden = true;
     rig.vapeModel = holder;
     addCredit(VAPE_MODEL.credit);
   }
@@ -1029,13 +997,13 @@ function scaleRig(F) {
   const base = tip.clone().add(V3(-2 * mm, 0, 0));        // a short 2 mm nozzle
   rig.nozzleR = [0.6 * mm, 0.25 * mm];
   rig.fit = { mm, face: F.face, tip, base, floorY: bc2.y - R2 * 1.35, vH0: rig.fit ? rig.fit.vH0 : rig.vH, top: rig.vape.top, optZ: F.optZ, flyLen: F.flyLen };
-  applyVapeScale($("scale").value);
+  applyVapeScale("same");
   rig.antenna = F.face;
   rig.nozzleLabel.copy(base.clone().lerp(tip, 0.3).add(V3(0, -2 * mm, 0)));
   rig.antennaLabel.copy(F.face.clone().add(V3(0, 1.2 * mm, 0)));
   rig.vapor.material.uniforms.uScale.value = 0.3 * F.flyLen;
   placeBrainView(F.flyLen);
-  frameRig($("view").value);
+  frameRig("side");
 }
 
 // the vape at one of two sizes: a real 130 mm box mod, or one as tall as the fly standing beside it
@@ -1273,7 +1241,7 @@ function placeBrainView(flyLen) {
     (flyBox.min.y + flyBox.max.y) / 2, (flyBox.min.z + flyBox.max.z) / 2);
   brainView.updateMatrixWorld(true);
   pointBoost = Math.max(1, Math.min(2.4, k / 2.2));
-  setFocus(+$("region").value);
+  setFocus(0);
   // the dopamine pulse and its label follow the mushroom body to its enlarged place
   rig.kc.copy(neuronPoints.localToWorld(rig.kcLocal.clone()));
   rig.daAnchor.copy(rig.kc).add(V3(0, height * 0.12, 0));
