@@ -1,0 +1,1879 @@
+<title>FlyVape</title>
+<meta name="description" content="A whole fruit fly connectome on a tethered nicotine rig, firing and dying in 3D.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;800&family=Martian+Mono:wght@300;400;500;700&family=Public+Sans:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+:root {
+  /* the microscope field: always dark, in both themes */
+  --field: #05070b;
+  --field-ink: #c9d3e6;
+  --field-dim: #6f7c93;
+  --dapi: #5a78ff;
+  --calcein: #8cf5bd;
+  --amber: #ffb14e;
+  --pi: #ff4a55;
+  --ash: #6b4a52;
+  /* the rig log: slide glass */
+  --ground: #e9edf2;
+  --panel: #f7f9fb;
+  --ink: #131820;
+  --ink-2: #4a5566;
+  --ink-3: #7a8596;
+  --rule: #d3d9e2;
+  --nicotine: #a67a12;
+  --dead: #d42a3a;
+  --spikes: #3a58d6;
+  --ok: #1f8a58;
+  --focus: #3a58d6;
+  --chart-grid: #dde2e9;
+  --mono: "Martian Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --sans: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --display: "Big Shoulders Display", "Arial Narrow", "Roboto Condensed", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #0b0e13;
+    --panel: #10141a;
+    --ink: #e2e8f0;
+    --ink-2: #a3aebd;
+    --ink-3: #6c7787;
+    --rule: #1f2630;
+    --nicotine: #e0b64a;
+    --dead: #ff5a64;
+    --spikes: #7d94ff;
+    --ok: #4cc58a;
+    --focus: #8aa0ff;
+    --chart-grid: #1a2029;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #0b0e13;
+  --panel: #10141a;
+  --ink: #e2e8f0;
+  --ink-2: #a3aebd;
+  --ink-3: #6c7787;
+  --rule: #1f2630;
+  --nicotine: #e0b64a;
+  --dead: #ff5a64;
+  --spikes: #7d94ff;
+  --ok: #4cc58a;
+  --focus: #8aa0ff;
+  --chart-grid: #1a2029;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--ground); color: var(--ink); font: 14px/1.5 var(--sans); }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.app {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 372px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 12px 16px;
+  height: 100dvh;
+  padding-block: 16px;
+  padding-inline: 16px;
+}
+
+/* ---- the eyepiece ---- */
+.field {
+  position: relative;
+  grid-column: 1; grid-row: 1;
+  background: var(--field);
+  color: var(--field-ink);
+  border-radius: 14px;
+  overflow: hidden;
+  min-height: 360px;
+}
+#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+#gl:active { cursor: grabbing; }
+.field-head { position: absolute; top: 18px; left: 20px; right: 20px; pointer-events: none; display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.field-head h1 { margin: 0; font: 800 44px/0.9 var(--display); letter-spacing: 0.01em; text-transform: uppercase; color: #eef2fa; }
+.field-head p { margin: 6px 0 0; max-width: 34ch; color: var(--field-dim); font-size: 13px; text-wrap: balance; }
+.scale { font: 400 10px/1.4 var(--mono); color: var(--field-dim); text-align: right; letter-spacing: 0.04em; }
+.scale b { display: block; font-weight: 500; color: var(--field-ink); font-size: 12px; }
+
+.controls { position: absolute; left: 16px; right: 16px; bottom: 14px; display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: space-between; align-items: flex-end; }
+.group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.group-label { font: 400 9.5px/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--field-dim); margin-right: 4px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 6px 10px 6px 8px;
+  border: 1px solid #1d2432; border-radius: 999px;
+  background: rgba(12, 16, 24, 0.72);
+  color: var(--field-ink); font-size: 12px; cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+.chip:hover { border-color: #33405a; }
+.chip[aria-pressed="false"] { color: var(--field-dim); background: rgba(12, 16, 24, 0.4); }
+.chip[aria-pressed="false"] .sw { opacity: 0.25; box-shadow: none; }
+.sw { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.sw.dapi { background: var(--dapi); box-shadow: 0 0 8px var(--dapi); }
+.sw.calcein { background: var(--calcein); box-shadow: 0 0 8px var(--calcein); }
+.sw.amber { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+.sw.pi { background: var(--pi); box-shadow: 0 0 8px var(--pi); }
+select.region {
+  appearance: none; padding: 6px 28px 6px 10px; border-radius: 999px;
+  border: 1px solid #1d2432; background: rgba(12, 16, 24, 0.72) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%236f7c93' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 11px center;
+  color: var(--field-ink); font-size: 12px; cursor: pointer;
+}
+select.region option { color: #111; }
+
+.rigcycle { display: flex; gap: 3px; margin-top: 12px; }
+.rigcycle span { font: 500 10px/1 var(--mono); letter-spacing: 0.14em; padding: 6px 9px; color: #3b4558; border: 1px solid #1a2130; }
+.rigcycle span:first-child { border-radius: 6px 0 0 6px; }
+.rigcycle span:last-child { border-radius: 0 6px 6px 0; }
+.rigcycle span.on { color: #0b0e13; border-color: transparent; background: var(--field-ink); }
+.rigcycle span.on.puff { background: #e0b64a; }
+
+.rig-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.rig-label { position: absolute; left: 0; top: 0; font: 400 9.5px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--field-dim); white-space: nowrap; will-change: transform; }
+.rig-label::before { content: ""; position: absolute; left: -8px; top: 50%; width: 4px; height: 4px; margin-top: -2px; border-radius: 50%; background: currentColor; }
+.rig-label.hot { color: #e0b64a; }
+.sw.rig { background: transparent; border: 1.5px solid var(--field-ink); box-shadow: none; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; font: 400 12px var(--mono); color: var(--field-dim); letter-spacing: 0.06em; pointer-events: none; }
+
+/* ---- transport ---- */
+.transport { grid-column: 1; grid-row: 2; display: grid; grid-template-columns: auto auto auto minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.btn[aria-pressed="false"] { color: var(--ink-3); }
+.btn { border: 1px solid var(--rule); background: var(--panel); border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 13px; font-weight: 600; min-width: 74px; }
+.btn:hover { border-color: var(--ink-3); }
+.speed { border: 1px solid var(--rule); background: var(--panel); border-radius: 8px; padding: 7px 8px; font: 400 12px var(--mono); }
+.scrub { position: relative; height: 40px; }
+.scrub canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.scrub input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.scrub input:focus-visible + .thumbring { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 6px; }
+.thumbring { position: absolute; inset: 0; pointer-events: none; }
+.clock { font: 400 12px/1.35 var(--mono); color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.clock b { color: var(--ink); font-weight: 500; }
+.live-pill { display: inline-flex; align-items: center; gap: 6px; font: 500 11px var(--mono); letter-spacing: 0.1em; color: var(--dead); }
+.live-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--dead); animation: blink 1.4s infinite; }
+@keyframes blink { 50% { opacity: 0.25; } }
+
+/* ---- rig log ---- */
+.log { grid-column: 2; grid-row: 1 / 3; overflow-y: auto; display: flex; flex-direction: column; gap: 0; padding-right: 2px; }
+.log section { padding-block: 16px; border-top: 1px solid var(--rule); }
+.log section:first-child { border-top: 0; padding-top: 2px; }
+.eyebrow { font: 500 10px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 10px; display: flex; justify-content: space-between; gap: 8px; }
+.eyebrow span:last-child { color: var(--ink-2); letter-spacing: 0.04em; text-transform: none; }
+
+.status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; font: 500 11px/1.5 var(--mono); border: 1px solid var(--rule); color: var(--ink-2); background: var(--panel); }
+.pill.stop { color: var(--dead); border-color: color-mix(in srgb, var(--dead) 40%, var(--rule)); }
+.pill.run { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--rule)); }
+
+.deadcount { display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; align-items: end; }
+.deadcount .num { font: 800 64px/0.86 var(--display); color: var(--dead); font-variant-numeric: tabular-nums; letter-spacing: 0.005em; }
+.deadcount .of { font: 400 12px/1.4 var(--mono); color: var(--ink-2); padding-bottom: 4px; }
+.deadcount .of b { color: var(--ink); font-weight: 500; }
+.note { margin: 10px 0 0; color: var(--ink-2); font-size: 13px; max-width: 60ch; }
+
+.meters { display: grid; gap: 12px; }
+.meter-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: baseline; }
+.meter-row .label { font-size: 13px; }
+.meter-row .val { font: 400 12px var(--mono); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.bar { grid-column: 1 / -1; position: relative; height: 6px; border-radius: 3px; background: var(--chart-grid); overflow: visible; }
+.bar i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--ink-3); }
+.bar em { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--dead); }
+
+.pips { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.pip { border: 1px solid var(--rule); border-radius: 6px; padding: 6px 4px 5px; text-align: center; font: 400 9.5px/1.2 var(--mono); color: var(--ink-2); background: var(--panel); }
+.pip::before { content: ""; display: block; width: 8px; height: 8px; margin: 0 auto 5px; border-radius: 50%; background: var(--ok); }
+.pip.dead { color: var(--ink-3); text-decoration: line-through; }
+.pip.dead::before { background: var(--dead); }
+
+.chart { display: grid; gap: 2px; }
+.chart + .chart { margin-top: 14px; }
+.chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.chart-head span:first-child { font-size: 13px; }
+.chart-head span:last-child { font: 500 12px var(--mono); font-variant-numeric: tabular-nums; }
+.chart canvas { width: 100%; height: 62px; display: block; }
+
+table.tests { width: 100%; border-collapse: collapse; font: 400 11.5px/1.3 var(--mono); font-variant-numeric: tabular-nums; }
+table.tests th { text-align: right; font-weight: 400; color: var(--ink-3); padding: 0 0 6px 6px; font-size: 10px; letter-spacing: 0.04em; }
+table.tests th:first-child, table.tests td:first-child { text-align: left; padding-left: 0; }
+table.tests td { text-align: right; padding: 4px 0 4px 6px; border-top: 1px solid var(--rule); }
+td.up { color: var(--ok); }
+td.down { color: var(--dead); }
+.tests-wrap { max-height: 190px; overflow-y: auto; }
+
+details { font-size: 13px; color: var(--ink-2); }
+details summary { cursor: pointer; color: var(--ink); font-weight: 600; }
+details dl { margin: 10px 0 0; display: grid; gap: 10px; }
+details dt { font: 500 10px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+details dd { margin: 2px 0 0; max-width: 62ch; }
+.credits { font-size: 11.5px; color: var(--ink-3); line-height: 1.55; }
+.credits a { color: var(--ink-2); }
+
+@media (max-width: 960px) {
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; height: auto; }
+  .field { grid-column: 1; grid-row: auto; height: 68vh; }
+  .transport { grid-column: 1; grid-row: auto; }
+  .log { grid-column: 1; grid-row: auto; overflow: visible; }
+}
+@media (max-width: 560px) {
+  .field-head h1 { font-size: 34px; }
+  .scale { display: none; }
+  .transport { grid-template-columns: auto minmax(0, 1fr); }
+  .transport .speed, .transport #loop { display: none; }
+  .transport .clock { grid-column: 1 / -1; text-align: left; }
+  .deadcount .num { font-size: 52px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-pill::before { animation: none; }
+}
+</style>
+
+<script>window.FLYVAPE_MODE = "replay";</script>
+
+<div class="app">
+  <section class="field" aria-label="3D view of the fly's central nervous system">
+    <canvas id="gl"></canvas>
+    <div class="rig-labels" id="rig-labels" aria-hidden="true"></div>
+    <div class="field-head">
+      <div>
+        <h1>FlyVape</h1>
+        <p>One male fruit fly's 165,122 neurons, wired exactly as measured, held on a nicotine rig.</p>
+        <div class="rigcycle" aria-label="Rig cycle">
+          <span data-ph="air">AIR</span><span data-ph="puff" class="puff">PUFF</span><span data-ph="wash">WASH</span>
+        </div>
+      </div>
+      <div class="scale" id="scale"><b>Male CNS v1.0</b>brain above, nerve cord below<br>drag to turn &middot; scroll to zoom</div>
+    </div>
+    <div class="controls">
+      <div class="group" role="group" aria-label="Channels">
+        <span class="group-label">Stain</span>
+        <button class="chip" id="ch-all" data-ch="all" aria-pressed="true"><i class="sw dapi"></i>Every neuron</button>
+        <button class="chip" id="ch-spike" data-ch="spike" aria-pressed="true"><i class="sw calcein"></i>Spiking</button>
+        <button class="chip" id="ch-dmg" data-ch="dmg" aria-pressed="true"><i class="sw amber"></i>Damaged</button>
+        <button class="chip" id="ch-dead" data-ch="dead" aria-pressed="true"><i class="sw pi"></i>Dead</button>
+      </div>
+      <div class="group">
+        <label class="group-label" for="region">Show</label>
+        <select class="region" id="region">
+          <option value="0">Whole nervous system</option>
+          <option value="3">Mushroom body (learning)</option>
+          <option value="8">Smell receptors</option>
+          <option value="4">Descending neurons</option>
+          <option value="16">The 10 walking neurons</option>
+          <option value="32">Dopamine neurons</option>
+        </select>
+        <button class="chip" id="ch-rig" data-ch="rig" aria-pressed="true"><i class="sw rig"></i>Rig</button>
+        <select class="region" id="view" aria-label="Camera view">
+          <option value="side">Side view</option>
+          <option value="fly">Close-up on the fly</option>
+          <option value="rig">Whole rig</option>
+        </select>
+        <select class="region" id="scale" aria-label="Vape size">
+          <option value="same">Vape a bit smaller than the fly</option>
+          <option value="real">Real vape size</option>
+        </select>
+        <select class="region" id="vape-colour" aria-label="Vape colour">
+          <option value="lagoon">Lagoon vape</option>
+          <option value="crimson">Crimson vape</option>
+          <option value="gunmetal">Gunmetal vape</option>
+          <option value="blush">Blush vape</option>
+        </select>
+      </div>
+    </div>
+    <div class="loading" id="loading">Loading 165,122 neurons&hellip;</div>
+  </section>
+
+  <div class="transport" id="transport">
+    <button class="btn" id="play" aria-label="Play">Play</button>
+    <select class="speed" id="speed" aria-label="Playback speed">
+      <option value="0.5">0.5&times;</option>
+      <option value="1" selected>1&times;</option>
+      <option value="3">3&times;</option>
+      <option value="8">8&times;</option>
+    </select>
+    <button class="btn" id="loop" aria-pressed="true" title="Start again from the first puff when the run ends">Loop</button>
+    <div class="scrub">
+      <canvas id="strip"></canvas>
+      <input type="range" id="scrub" min="0" max="0" value="0" step="1" aria-label="Position in the run">
+      <div class="thumbring"></div>
+    </div>
+    <div class="clock" id="clock"><b>&mdash;</b><br>&mdash;</div>
+  </div>
+
+  <aside class="log" aria-label="Rig log">
+    <section>
+      <div class="status">
+        <span class="pill" id="state-pill">Loading</span>
+        <span class="pill" id="phase-pill">&mdash;</span>
+        <span class="pill" id="puff-pill">0 puffs</span>
+      </div>
+    </section>
+
+    <section>
+      <p class="eyebrow"><span>Dead neurons</span><span id="first-death">no deaths yet</span></p>
+      <div class="deadcount">
+        <div class="num" id="dead-num">0</div>
+        <div class="of"><b id="dead-pct">0.00%</b><br>of 165,122</div>
+      </div>
+      <p class="note" id="stop-note">The rig stops when all walking neurons are dead, half the brain is dead, or brain activity collapses.</p>
+    </section>
+
+    <section>
+      <p class="eyebrow"><span>Stop conditions</span><span>whichever comes first</span></p>
+      <div class="meters">
+        <div class="meter-row">
+          <span class="label">Brain dead</span><span class="val" id="m-half">0.0% of 50%</span>
+          <div class="bar"><i id="m-half-bar" style="width:0"></i><em style="left:calc(100% - 2px)"></em></div>
+        </div>
+        <div class="meter-row">
+          <span class="label">Activity vs baseline</span><span class="val" id="m-act">&mdash;</span>
+          <div class="bar"><i id="m-act-bar" style="width:0"></i><em style="left:2.5%"></em></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <p class="eyebrow"><span>Walking neurons</span><span id="walk-count">10 of 10 alive</span></p>
+      <div class="pips" id="pips"></div>
+      <p class="note">These descending neurons turn a fly (DNa02), walk it forward (DNa01), back (MDN) and stop it (DNp09).</p>
+    </section>
+
+    <section>
+      <p class="eyebrow"><span>Rig readouts</span><span id="brain-time">0.0 s brain time</span></p>
+      <div class="chart"><div class="chart-head"><span>Nicotine level</span><span id="v-nic" style="color:var(--nicotine)">0.00</span></div><canvas id="c-nic"></canvas></div>
+      <div class="chart"><div class="chart-head"><span>Neurons dead</span><span id="v-dead" style="color:var(--dead)">0</span></div><canvas id="c-dead"></canvas></div>
+      <div class="chart"><div class="chart-head"><span>Spikes per second</span><span id="v-sps" style="color:var(--spikes)">&mdash;</span></div><canvas id="c-sps"></canvas></div>
+    </section>
+
+    <section>
+      <p class="eyebrow"><span>Does it want the vape?</span><span id="mb-dep">0 weakened</span></p>
+      <p class="note" style="margin:0 0 10px">A sniff test every few puffs, read off the 44,042 synapses where the mushroom body learns. Leaning runs from &minus;1 (avoid) to +1 (approach). The gap is e-liquid minus a control smell. As neurons die, both smells drift toward approach together: that is avoidance circuitry dying, not the fly learning to like the vape.</p>
+      <div class="tests-wrap">
+        <table class="tests">
+          <thead><tr><th>puffs</th><th>e-liquid</th><th>control</th><th>gap</th></tr></thead>
+          <tbody id="tests"><tr><td colspan="4" style="color:var(--ink-3)">first test runs before the first puff</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <details>
+        <summary>What is measured, and what is made up</summary>
+        <dl>
+          <div><dt>Measured</dt><dd>Every neuron, every synapse and its sign, from electron microscopy. The soma positions you are looking at. How fly smell receptors respond to vanillin, acetaldehyde, propylene glycol, glycerol, menthol and nicotine. Which dopamine neurons reach which mushroom-body outputs.</dd></div>
+          <div><dt>Made up, on purpose</dt><dd>Nicotine as extra drive on neurons in proportion to their acetylcholine inputs. Death from sustained over-firing while nicotine is bound at a neuron's receptors, the calcium route nicotinic receptors open. The dose rising every 10 puffs as tolerance builds. The e-liquid recipe. Reward dopamine on every puff. Compressed time: each rig window is 24 ms of brain. The fly's body is NeuroMechFly, built from a scan of a real fruit fly, scaled so its eyes sit over the brain's optic lobes and posed by hand. Its wings open on the rig's schedule and beat faster after each dopamine reward, and faster still as rewards add up, slowed down to be visible. The simulated neurons do not drive them. The tether, button pad and vape are drawn. Only the neurons sit at measured positions, drawn enlarged beside the fly with a dashed line to where they sit in its head. The fly pressing AIR, PUFF and WASH shows the rig's schedule. The simulated fly does not choose when to vape.</dd></div>
+          <div><dt>Worth knowing</dt><dd>A fly's nose barely detects nicotine itself. What it smells is the flavour and the aldehyde from heated propylene glycol. About 23,800 neurons, mostly sensory cells whose bodies sit in the antenna, eye or legs, have no cell body inside the scanned volume. 22,827 of them are drawn at the average position of the cells they connect to; 1,295 connect to nothing placed and are not drawn.</dd></div>
+          <div><dt>This run</dt><dd id="cfg">&mdash;</dd></div>
+        </dl>
+      </details>
+    </section>
+
+    <section class="credits">
+      Connectome: FlyEM male CNS v1.0, &copy; HHMI Janelia FlyEM, Cambridge Connectomics Group and Google Research, CC-BY.
+      Odour responses: DoOR 2.0, M&uuml;nch &amp; Galizia 2016, CC BY-SA 4.0.
+      Simulator and learning circuit: fruitflydev/flycoinrh, MIT. No animal was involved. <span id="model-credits"></span>
+    </section>
+  </aside>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+
+const MODE = window.FLYVAPE_MODE === "live" ? "live" : "replay";
+const BASE = MODE === "live" ? "" : "replay/";
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const $ = (id) => document.getElementById(id);
+const fmt = (x) => Math.round(x).toLocaleString("en-US");
+const STOP_TEXT = {
+  motor: "Stopped: every walking neuron is dead.",
+  half: "Stopped: half the brain is dead.",
+  silent: "Stopped: brain activity collapsed.",
+  limit: "Stopped: the run reached its window limit.",
+  stopped: "Stopped by hand.",
+  interrupted: "Stopped by hand.",
+};
+const ENDED_TEXT = {
+  motor: "This run ends when the last walking neuron dies.",
+  half: "This run ends when half the brain is dead.",
+  silent: "This run ends when brain activity collapses.",
+  limit: "This run ends at its window limit, before any stop condition was met.",
+  stopped: "This run was stopped by hand.",
+  interrupted: "This run was stopped by hand.",
+};
+let ENC = null;             // "base64" when binaries are published as text
+function b64(s) {
+  s = s.trim();
+  if (Uint8Array.fromBase64) return Uint8Array.fromBase64(s);
+  const bin = atob(s), out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+async function bytes(name) {
+  if (ENC === "base64") {
+    const r = await fetch(BASE + name.replace(/\.bin$/, ".b64.txt"));
+    if (!r.ok) throw new Error(`${name}: ${r.status}`);
+    return b64(await r.text());
+  }
+  const r = await fetch(BASE + name);
+  if (!r.ok) throw new Error(`${name}: ${r.status}`);
+  return new Uint8Array(await r.arrayBuffer());
+}
+const BIT = { KC: 1, MBON: 2, DN: 4, ORN: 8, walk: 16, DAN: 32, JO: 64 };
+
+let N = 0, meta = null, groups = null;
+let act, dmg, deadT, focus, geom;
+let deadMask;                     // Uint8Array, 1 when dead (for the pips and resync)
+const clockStart = performance.now();
+const now = () => (performance.now() - clockStart) / 1000 + 1;
+
+// ---------------------------------------------------------------- 3D
+const canvas = $("gl");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const scene = new THREE.Scene();
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.3);
+keyLight.position.set(-3, 4, 5);
+scene.add(keyLight);
+const camera = new THREE.PerspectiveCamera(38, 1, 0.01, 50);
+camera.position.set(0, 0.1, 3.3);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.autoRotate = false;
+controls.autoRotateSpeed = 0.35;
+controls.minDistance = 0.6;
+controls.maxDistance = 8;
+canvas.addEventListener("pointerdown", () => { controls.autoRotate = false; rig.userMoved = true; });
+canvas.addEventListener("wheel", () => { rig.userMoved = true; }, { passive: true });
+
+const uniforms = {
+  uTime: { value: 1 }, uSize: { value: 4.2 }, uPR: { value: renderer.getPixelRatio() },
+  uAll: { value: 1 }, uSpike: { value: 1 }, uDmg: { value: 1 }, uDead: { value: 1 },
+};
+const material = new THREE.ShaderMaterial({
+  uniforms, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+  vertexShader: `
+    attribute float aAct; attribute float aDmg; attribute float aDeadT; attribute float aFocus; attribute float aVis;
+    uniform float uTime, uSize, uPR, uAll, uSpike, uDmg, uDead;
+    varying vec3 vColor;
+    void main() {
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      gl_Position = projectionMatrix * mv;
+      vec3 dapi = vec3(0.26, 0.36, 1.0);
+      vec3 calc = vec3(0.52, 1.0, 0.72);
+      vec3 amber = vec3(1.0, 0.62, 0.22);
+      vec3 pi = vec3(1.0, 0.22, 0.26);
+      vec3 ash = vec3(0.30, 0.13, 0.16);
+      vec3 c = vec3(0.0);
+      float grow = 0.0;
+      if (aDeadT > 0.0) {
+        float age = max(0.0, uTime - aDeadT);
+        float flash = exp(-age * 1.6);
+        c = mix(ash, pi * 1.8, flash) * uDead;
+        grow = 2.2 * flash * uDead;
+      } else {
+        c = dapi * 0.16 * uAll;
+        if (aDmg > 0.02) c += amber * aDmg * 0.8 * uDmg;
+        if (aAct > 0.01) { c += calc * aAct * 0.5 * uSpike; grow = 0.6 * aAct * uSpike; }
+      }
+      vColor = c * aFocus * aVis;
+      gl_PointSize = uSize * uPR * (1.0 + grow) * (2.6 / max(0.2, -mv.z));
+    }`,
+  fragmentShader: `
+    varying vec3 vColor;
+    void main() {
+      vec2 p = gl_PointCoord - 0.5;
+      float d = dot(p, p);
+      if (d > 0.25) discard;
+      gl_FragColor = vec4(vColor * smoothstep(0.25, 0.0, d), 1.0);
+    }`,
+});
+
+function resize() {
+  const r = canvas.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / Math.max(1, r.height);
+  camera.updateProjectionMatrix();
+  drawCharts();
+  drawStrip();
+  if (rig.ready && !rig.userMoved && !rig.cam && r.width > 0 && r.height > 0) frameRig(rig.view);
+}
+new ResizeObserver(resize).observe(canvas);
+
+function buildGeometry(xyz, metaBin) {
+  const sc = new Uint8Array(N), placed = new Uint8Array(N);
+  for (let i = 0; i < N; i++) { sc[i] = metaBin[2 * i]; placed[i] = metaBin[2 * i + 1]; }
+  // orient like a tethered fly: the long axis (brain to nerve cord) runs along X
+  // with the head toward -X, the mushroom body above the antennal lobes (+Y),
+  // and the optic lobes spread along Z
+  const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+  for (let i = 0; i < N; i++) if (placed[i] < 3) for (let a = 0; a < 3; a++) {
+    const v = xyz[3 * i + a]; if (v < lo[a]) lo[a] = v; if (v > hi[a]) hi[a] = v;
+  }
+  const order = [0, 1, 2].sort((a, b) => (hi[b] - lo[b]) - (hi[a] - lo[a]));
+  const [along, wide, thin] = order;
+  const mid = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2];
+  const span = Math.max(hi[along] - lo[along], 1e-6) / 2;
+  const pos = new Float32Array(3 * N);
+  const vis = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    pos[3 * i] = (xyz[3 * i + along] - mid[along]) / span * 1.1;
+    pos[3 * i + 1] = (xyz[3 * i + thin] - mid[thin]) / span * 1.1;
+    pos[3 * i + 2] = (xyz[3 * i + wide] - mid[wide]) / span * 1.1;
+    vis[i] = placed[i] < 3 ? 1 : 0;
+  }
+  const meanOf = (idx, a) => { let t = 0, n = 0; for (const i of idx) if (placed[i] < 3) { t += pos[3 * i + a]; n++; } return n ? t / n : 0; };
+  const ol = meta.superclass.indexOf("ol_intrinsic");
+  const olIdx = []; for (let i = 0; i < N; i += 4) if (sc[i] === ol) olIdx.push(i);
+  const sx = meanOf(olIdx, 0) > 0 ? -1 : 1;
+  const sy = meanOf(groups.KC, 1) < meanOf(groups.ORN, 1) ? -1 : 1;
+  const sz = sx * sy;
+  for (let i = 0; i < N; i++) { pos[3 * i] *= sx; pos[3 * i + 1] *= sy; pos[3 * i + 2] *= sz; }
+  act = new Float32Array(N); dmg = new Float32Array(N); deadT = new Float32Array(N);
+  focus = new Float32Array(N).fill(1); deadMask = new Uint8Array(N);
+  geom = new THREE.BufferGeometry();
+  geom.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geom.setAttribute("aAct", new THREE.BufferAttribute(act, 1).setUsage(THREE.DynamicDrawUsage));
+  geom.setAttribute("aDmg", new THREE.BufferAttribute(dmg, 1).setUsage(THREE.DynamicDrawUsage));
+  geom.setAttribute("aDeadT", new THREE.BufferAttribute(deadT, 1).setUsage(THREE.DynamicDrawUsage));
+  geom.setAttribute("aFocus", new THREE.BufferAttribute(focus, 1));
+  geom.setAttribute("aVis", new THREE.BufferAttribute(vis, 1));
+  const pts = new THREE.Points(geom, material);
+  pts.frustumCulled = false;
+  scene.add(pts);
+  neuronPoints = pts;
+  buildRig(anchorsFrom(pos, sc, placed));
+}
+
+function setFocus(maskBits) {
+  if (!maskBits) focus.fill(1);
+  else {
+    focus.fill(0.05);
+    for (const [name, bit] of Object.entries(BIT)) {
+      if (!(maskBits & bit) || !groups[name]) continue;
+      for (const i of groups[name]) focus[i] = 1;
+    }
+    if (maskBits & BIT.walk) for (const i of groups.walk) focus[i] = 1;
+  }
+  uniforms.uSize.value = (maskBits === BIT.walk ? 16 : maskBits ? 5.2 : 4.2) * pointBoost;
+  geom.attributes.aFocus.needsUpdate = true;
+}
+$("region").addEventListener("change", (e) => setFocus(+e.target.value));
+for (const b of document.querySelectorAll(".chip")) {
+  b.addEventListener("click", () => {
+    const on = b.getAttribute("aria-pressed") !== "true";
+    b.setAttribute("aria-pressed", String(on));
+    if (b.dataset.ch === "rig") { setRigVisible(on); return; }
+    uniforms[{ all: "uAll", spike: "uSpike", dmg: "uDmg", dead: "uDead" }[b.dataset.ch]].value = on ? 1 : 0;
+  });
+}
+
+let lastFrameT = performance.now();
+function render(t) {
+  const dt = Math.min(0.1, (t - lastFrameT) / 1000);
+  lastFrameT = t;
+  if (act) {
+    const k = Math.exp(-dt * 5.5);
+    for (let i = 0; i < N; i++) if (act[i] > 0.004) act[i] *= k; else act[i] = 0;
+    geom.attributes.aAct.needsUpdate = true;
+    uniforms.uTime.value = now();
+    if (MODE === "replay") tickReplay(dt);
+  }
+  rigUpdate(dt);
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(render);
+}
+
+// ---------------------------------------------------------------- the rig: drawn around the brain, not measured
+const rig = { group: new THREE.Group(), labels: [], legs: [], pulses: [], ready: false,
+  emitUntil: 0, glow: 0, carry: 0, turn: 0, speed: 0, turnS: 0, speedS: 0, gait: 0, dopaBurst: 0, dopaLevel: 0 };
+scene.add(rig.group);
+const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+const AX_Y = V3(0, 1, 0), AX_Z = V3(0, 0, 1);
+const _v = V3();
+
+function shellMat(hex, strength) {
+  return new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: new THREE.Color(hex) }, uStrength: { value: strength } },
+    vertexShader: `varying vec3 vN; varying vec3 vV;
+      void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal);
+        vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform vec3 uColor; uniform float uStrength; varying vec3 vN; varying vec3 vV;
+      void main() { float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.2);
+        gl_FragColor = vec4(uColor * (0.05 + f) * uStrength, 1.0); }`,
+    transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+  });
+}
+const glowMat = (hex, opacity) => new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity, depthWrite: false,
+  depthTest: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+const lineMat = (hex, opacity) => new THREE.LineBasicMaterial({ color: hex, transparent: true, opacity, depthWrite: false,
+  depthTest: false, blending: THREE.AdditiveBlending });
+function ellipsoid(c, r, hex, s) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(1, 36, 24), shellMat(hex, s));
+  m.position.copy(c); m.scale.copy(r); return m;
+}
+function tube(a, b, rA, rB, hex, s) {
+  const d = V3().subVectors(b, a), len = d.length();
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rB, rA, len, 16, 1, true), shellMat(hex, s));
+  m.position.copy(a).addScaledVector(d, 0.5);
+  m.quaternion.setFromUnitVectors(AX_Y, d.normalize());
+  return m;
+}
+function addLabel(text, anchor, cls) {
+  const el = document.createElement("span");
+  el.className = "rig-label" + (cls ? " " + cls : "");
+  el.textContent = text;
+  $("rig-labels").appendChild(el);
+  rig.labels.push({ el, anchor });
+  return el;
+}
+function setRigVisible(on) { rig.group.visible = on; $("rig-labels").hidden = !on; }
+
+function anchorsFrom(pos, sc, placed) {
+  const kind = meta.superclass.map((s) => (s.startsWith("vnc") ? 2 : /^(ol_|cb_|visual_)/.test(s) ? 1 : 0));
+  const brain = [], vnc = [];
+  for (let i = 0; i < N; i += 2) if (placed[i] < 2) { const k = kind[sc[i]]; if (k === 1) brain.push(i); else if (k === 2) vnc.push(i); }
+  const box = (idx) => {
+    const lo = V3(), hi = V3();
+    for (let a = 0; a < 3; a++) {
+      const v = Float32Array.from(idx, (i) => pos[3 * i + a]).sort();
+      lo.setComponent(a, v[Math.floor(v.length * 0.01)]);
+      hi.setComponent(a, v[Math.floor(v.length * 0.99)]);
+    }
+    return { lo, hi, c: lo.clone().add(hi).multiplyScalar(0.5), h: hi.clone().sub(lo).multiplyScalar(0.5) };
+  };
+  const centroid = (idx) => {
+    const c = V3(); let n = 0;
+    for (const i of idx) if (placed[i] < 3) { c.x += pos[3 * i]; c.y += pos[3 * i + 1]; c.z += pos[3 * i + 2]; n++; }
+    return n ? c.divideScalar(n) : c;
+  };
+  const b = box(brain);
+  // the two optic lobes sit just inside the compound eyes: a fly model is fitted eye to lobe
+  const olCode = meta.superclass.indexOf("ol_intrinsic"), Lc = V3(), Rc = V3();
+  let nl = 0, nr = 0;
+  for (let i = 0; i < N; i += 3) if (placed[i] < 2 && sc[i] === olCode) {
+    const z = pos[3 * i + 2];
+    if (z < b.c.z) { Lc.x += pos[3 * i]; Lc.y += pos[3 * i + 1]; Lc.z += z; nl++; }
+    else { Rc.x += pos[3 * i]; Rc.y += pos[3 * i + 1]; Rc.z += z; nr++; }
+  }
+  if (nl) Lc.divideScalar(nl);
+  if (nr) Rc.divideScalar(nr);
+  const optic = { mid: Lc.clone().add(Rc).multiplyScalar(0.5), span: Math.abs(Rc.z - Lc.z) };
+  return { brain: b, vnc: vnc.length > 100 ? box(vnc) : b, orn: centroid(groups.ORN), kc: centroid(groups.KC), optic };
+}
+
+function buildRig(A) {
+  const g = rig.group, B = A.brain, Vn = A.vnc;
+  const BODY = 0x9fb0cc, STEEL = 0xc9d3e6, EYE = 0xff6a5a, AMBER = 0xe0b64a, BALL = 0x8fa0c0;
+
+  const bodyG = new THREE.Group(); g.add(bodyG); rig.body = bodyG;
+  // head capsule over the brain, compound eyes over the optic lobes
+  const headC = B.c.clone();
+  const headR = V3(Math.max(B.h.x * 1.7, B.h.z * 0.42), B.h.y * 1.45, B.h.z * 1.02);
+  bodyG.add(ellipsoid(headC, headR, BODY, 0.36));
+  for (const s of [-1, 1]) {
+    bodyG.add(ellipsoid(V3(headC.x - headR.x * 0.08, headC.y + headR.y * 0.08, headC.z + s * headR.z * 0.8),
+      V3(headR.x * 0.78, headR.y * 0.86, headR.z * 0.32), EYE, 0.28));
+  }
+  // thorax over the nerve cord, which runs along its floor; abdomen behind
+  const thR = V3(Math.max(Vn.h.x * 1.1, headR.x * 1.2), headR.z * 0.62, headR.z * 0.66);
+  const thC = V3(Vn.c.x, Vn.c.y + thR.y * 0.45, Vn.c.z);
+  bodyG.add(ellipsoid(thC, thR, BODY, 0.36));
+  const abR = V3(thR.x * 1.2, thR.y * 0.8, thR.z * 0.78);
+  const abC = V3(thC.x + thR.x + abR.x * 0.78, thC.y - thR.y * 0.2, thC.z);
+  bodyG.add(ellipsoid(abC, abR, BODY, 0.3));
+  // wings folded back over the abdomen
+  for (const s of [-1, 1]) {
+    const wing = new THREE.Group();
+    wing.position.set(thC.x + thR.x * 0.15, thC.y + thR.y * 0.85, thC.z + s * thR.z * 0.35);
+    wing.rotation.y = -s * 0.32;
+    const len = abR.x * 2.1, wid = thR.z * 0.75;
+    const pts = new THREE.EllipseCurve(len / 2, 0, len / 2, wid / 2).getPoints(64).map((p) => V3(p.x, 0, p.y));
+    wing.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), lineMat(BODY, 0.3)));
+    const fill = new THREE.Mesh(new THREE.CircleGeometry(1, 48), glowMat(BODY, 0.045));
+    fill.scale.set(len / 2, wid / 2, 1); fill.rotation.x = -Math.PI / 2; fill.position.x = len / 2;
+    wing.add(fill);
+    bodyG.add(wing);
+  }
+  // antennae, in front of the antennal lobes where the smell receptors end
+  const u = headR.x, tips = [];
+  for (const s of [-1, 1]) {
+    const base = V3(headC.x - headR.x * 0.9, A.orn.y + headR.y * 0.15, headC.z + s * headR.z * 0.14);
+    const dir = V3(-1, -0.35, s * 0.25).normalize();
+    const p1 = base.clone().addScaledVector(dir, u * 0.28);
+    const p2 = p1.clone().addScaledVector(dir, u * 0.24);
+    bodyG.add(tube(base, p1, 0.012, 0.01, STEEL, 0.5));
+    bodyG.add(tube(p1, p2, 0.014, 0.012, STEEL, 0.5));
+    const fun = p2.clone().addScaledVector(V3(-0.2, -1, 0).normalize(), u * 0.14);
+    bodyG.add(ellipsoid(fun, V3(u * 0.12, u * 0.2, u * 0.1), STEEL, 0.5));
+    const arista = [fun.clone(), fun.clone().add(V3(-u * 0.25, u * 0.35, s * u * 0.1)), fun.clone().add(V3(-u * 0.55, u * 0.55, s * u * 0.2))];
+    bodyG.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(arista), lineMat(STEEL, 0.6)));
+    tips.push(fun);
+  }
+  const antenna = tips[0].clone().add(tips[1]).multiplyScalar(0.5);
+  rig.flyFit = { headC, headR, thC, thR, abC, abR, abEnd: abC.x + abR.x };
+
+  // tether: a pin glued to the thorax, held from above
+  const tetherG = new THREE.Group(); g.add(tetherG); rig.tether = tetherG;
+  const glue = V3(thC.x - thR.x * 0.1, thC.y + thR.y * 0.97, thC.z);
+  const top = glue.clone().add(V3(0, headR.z * 1.5, 0));
+  tetherG.add(tube(glue, top, 0.012, 0.012, STEEL, 0.7));
+  tetherG.add(ellipsoid(glue, V3(0.035, 0.022, 0.035), AMBER, 0.45));
+  tetherG.add(tube(top, top.clone().add(V3(headR.z * 1.0, 0, 0)), 0.022, 0.022, STEEL, 0.5));
+  rig.glue = glue.clone(); rig.tetherLen = headR.z * 1.5;
+  rig.tetherLabel = glue.clone().lerp(top, 0.62);
+  addLabel("tether", rig.tetherLabel);
+
+  // the air-supported ball the fly walks on
+  const flyLen = (abC.x + abR.x) - antenna.x;
+  const R = flyLen * 0.3, legDrop = thR.y * 0.55;
+  const ballC = V3(thC.x - thR.x * 0.1, thC.y - thR.y - legDrop - R * 0.97, thC.z);
+  const ballG = new THREE.Group(); g.add(ballG); rig.ballG = ballG;
+  rig.ball = new THREE.Group(); rig.ball.position.copy(ballC); ballG.add(rig.ball);
+  const dots = new Float32Array(2400 * 3);
+  for (let i = 0; i < 2400; i++) {
+    const w = Math.random() * 2 - 1, th = Math.random() * 6.2832, r = Math.sqrt(1 - w * w);
+    dots[3 * i] = R * r * Math.cos(th); dots[3 * i + 1] = R * w; dots[3 * i + 2] = R * r * Math.sin(th);
+  }
+  const dg = new THREE.BufferGeometry(); dg.setAttribute("position", new THREE.BufferAttribute(dots, 3));
+  rig.ball.add(new THREE.Points(dg, new THREE.PointsMaterial({ color: BALL, size: R * 0.04, sizeAttenuation: true,
+    transparent: true, opacity: 0.55, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending })));
+  for (const rot of [[0, 0, 0], [Math.PI / 2, 0, 0], [0, Math.PI / 2, 0]]) {
+    const ring = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(
+      new THREE.EllipseCurve(0, 0, R, R).getPoints(96).map((p) => V3(p.x, p.y, 0))), lineMat(BALL, 0.2));
+    ring.rotation.set(rot[0], rot[1], rot[2]); rig.ball.add(ring);
+  }
+  const cupY = ballC.y - R * 0.45;
+  const cup = new THREE.Mesh(new THREE.TorusGeometry(R * 0.93, R * 0.02, 8, 96), shellMat(STEEL, 0.5));
+  cup.position.set(ballC.x, cupY, ballC.z); cup.rotation.x = Math.PI / 2; ballG.add(cup);
+  ballG.add(tube(V3(ballC.x, cupY, ballC.z), V3(ballC.x, ballC.y - R * 1.35, ballC.z), R * 0.06, R * 0.09, STEEL, 0.45));
+  rig.ballLabel = V3(ballC.x + R * 0.95, ballC.y - R * 0.55, ballC.z);
+  rig.ballLabelEl = addLabel("air-supported ball", rig.ballLabel);
+  // six legs from the thorax to the ball
+  const legX = [-0.55, 0.0, 0.5], footX = [-0.95, -0.05, 0.75];
+  for (let j = 0; j < 3; j++) for (const s of [-1, 1]) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(9), 3));
+    const line = new THREE.Line(geo, lineMat(0xaab6cc, 0.6)); line.frustumCulled = false; g.add(line);
+    rig.legs.push({ line, j, tripod: (j + (s > 0 ? 1 : 0)) % 2,
+      hip: V3(thC.x + legX[j] * thR.x, thC.y - thR.y * 0.7, thC.z + s * thR.z * 0.3),
+      foot0: V3(thC.x + footX[j] * thR.x, 0, thC.z + s * thR.z * 1.25) });
+  }
+
+  // the button pad the fly stands on: AIR, PUFF and WASH under its front, middle and hind legs
+  makePad({ xs: [0, 1, 2].map((j) => thC.x + footX[j] * thR.x), zc: thC.z, capX: thR.x * 0.72, capZ: thR.z * 3.0,
+    capH: thR.y * 0.28, padH: thR.y * 0.55, capTop: thC.y - thR.y - legDrop });
+  rig.ballG.visible = false;
+  rig.ballLabelEl.hidden = true;
+
+  // the vape: a box mod with a glass tank, its mouthpiece plumbed to a nozzle aimed at the antennae
+  const nozzleTip = V3(antenna.x - headR.x * 0.75, antenna.y - headR.x * 0.1, antenna.z);
+  const nozzleBase = nozzleTip.clone().add(V3(-headR.x * 1.1, 0, 0));
+  const vH = R * 1.45;
+  const vape = buildVape(vH);
+  vape.group.position.set(nozzleBase.x - headR.x * 1.4 - vH * 0.15, ballC.y - R, thC.z - headR.z * 0.25);
+  vape.group.rotation.y = -0.4;
+  g.add(vape.group);
+  vape.group.updateMatrixWorld(true);
+  rig.vTip = vape.group.localToWorld(V3(0, vape.top, 0));
+  rig.vH = vH; rig.tubeR = vH * 0.016; rig.headRx = headR.x;
+  plumb(nozzleBase, nozzleTip);
+  rig.vape = vape;
+  setColourway($("vape-colour").value);
+  rig.vapeLabel = vape.group.localToWorld(V3(vH * 0.2, vH * 0.28, 0));
+  addLabel("vape", rig.vapeLabel);
+  rig.nozzleLabel = nozzleBase.clone().lerp(nozzleTip, 0.3).add(V3(0, -headR.x * 0.5, 0));
+  addLabel("odour nozzle", rig.nozzleLabel);
+  rig.antennaLabel = antenna.clone().add(V3(0, headR.x * 0.8, 0));
+  addLabel("antenna", rig.antennaLabel);
+  rig.antenna = antenna; rig.kc = A.kc.clone(); rig.optic = A.optic;
+  rig.ballC = ballC; rig.R = R; rig.thR = thR;
+  rig.kcLocal = A.kc.clone();
+  rig.daAnchor = A.kc.clone().add(V3(0, headR.y * 1.1, 0));
+  rig.daLabel = addLabel("dopamine reward", rig.daAnchor, "hot");
+  rig.daLabel.hidden = true;
+
+  frameRig();
+
+  // vapour particles and the glow travelling down the tube
+  const NV = 5000;
+  rig.vp = { n: NV, pos: new Float32Array(NV * 3), vel: new Float32Array(NV * 3), age: new Float32Array(NV).fill(1),
+    life: new Float32Array(NV).fill(1), cursor: 0 };
+  const vg = new THREE.BufferGeometry();
+  vg.setAttribute("position", new THREE.BufferAttribute(rig.vp.pos, 3).setUsage(THREE.DynamicDrawUsage));
+  vg.setAttribute("aAge", new THREE.BufferAttribute(rig.vp.age, 1).setUsage(THREE.DynamicDrawUsage));
+  rig.vapor = new THREE.Points(vg, new THREE.ShaderMaterial({
+    uniforms: { uPR: uniforms.uPR, uScale: { value: headR.x } },
+    transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+    vertexShader: `attribute float aAge; uniform float uPR, uScale; varying float vA;
+      void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv;
+        vA = aAge >= 1.0 ? 0.0 : smoothstep(0.0, 0.06, aAge) * (1.0 - aAge);
+        gl_PointSize = uPR * uScale * (90.0 + 420.0 * aAge) / max(0.2, -mv.z); }`,
+    fragmentShader: `varying float vA; void main() { vec2 p = gl_PointCoord - 0.5; float d = dot(p, p);
+        if (d > 0.25) discard; gl_FragColor = vec4(vec3(1.0, 0.93, 0.78) * smoothstep(0.25, 0.0, d) * vA * 0.17, 1.0); }`,
+  }));
+  rig.vapor.frustumCulled = false; g.add(rig.vapor);
+  rig.tp = new Float32Array(24 * 3);
+  const tg = new THREE.BufferGeometry(); tg.setAttribute("position", new THREE.BufferAttribute(rig.tp, 3).setUsage(THREE.DynamicDrawUsage));
+  const dotCanvas = document.createElement("canvas"); dotCanvas.width = dotCanvas.height = 32;
+  const dctx = dotCanvas.getContext("2d"), grad = dctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  grad.addColorStop(0, "rgba(255,255,255,1)"); grad.addColorStop(1, "rgba(255,255,255,0)");
+  dctx.fillStyle = grad; dctx.fillRect(0, 0, 32, 32);
+  rig.tubeGlow = new THREE.Points(tg, new THREE.PointsMaterial({ color: AMBER, size: rig.tubeR * 2.2, sizeAttenuation: true,
+    map: new THREE.CanvasTexture(dotCanvas), transparent: true, opacity: 0, depthWrite: false, depthTest: false,
+    blending: THREE.AdditiveBlending }));
+  rig.tubeGlow.frustumCulled = false; g.add(rig.tubeGlow);
+  rig.ready = true;
+  const bodyLen = (abC.x + abR.x) - (headC.x - headR.x);
+  // the fly is shown FLY_SCALE times larger than life against the rig, so it is easy to see
+  scaleRig({ mm: bodyLen / (3.0 * FLY_SCALE), flyLen: bodyLen, glue: rig.glue.clone(), face: antenna.clone(), optZ: headC.z,
+    feet: V3(thC.x - thR.x * 0.1, thC.y - thR.y - legDrop, thC.z) });
+}
+
+// the box mod, in its own units: height H, origin at the base, screen facing +Z
+const VAPE_COLOURS = {
+  lagoon: { top: 0x27d6c8, bottom: 0x2340d0, trim: 0x14161b },
+  crimson: { top: 0xee2a55, bottom: 0x3a3fd8, trim: 0x14161b },
+  gunmetal: { top: 0x686d75, bottom: 0x44484f, trim: 0x1c1e22 },
+  blush: { top: 0xf4c9d8, bottom: 0xeab4c8, trim: 0xf1d2de },
+};
+function buildVape(H) {
+  const grp = new THREE.Group();
+  const W = H * 0.23, D = H * 0.15, BH = H * 0.56;
+  const chrome = new THREE.MeshStandardMaterial({ color: 0xd9dde3, metalness: 1, roughness: 0.18 });
+  const black = new THREE.MeshStandardMaterial({ color: 0x0d0f12, metalness: 0.2, roughness: 0.3 });
+  const bodyGeo = new RoundedBoxGeometry(W, BH, D, 5, W * 0.14);
+  bodyGeo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(bodyGeo.attributes.position.count * 3), 3));
+  const body = new THREE.Mesh(bodyGeo, new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.55, roughness: 0.32 }));
+  body.position.y = BH / 2; grp.add(body);
+  const trimMat = new THREE.MeshStandardMaterial({ color: 0x14161b, metalness: 0.1, roughness: 0.85 });
+  const grip = new THREE.Mesh(new RoundedBoxGeometry(W * 0.08, BH * 0.84, D * 0.8, 3, W * 0.03), trimMat);
+  grip.position.set(-W / 2, BH * 0.5, 0); grp.add(grip);
+  const fireMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.6, roughness: 0.25 });
+  const fire = new THREE.Mesh(new THREE.CylinderGeometry(W * 0.17, W * 0.17, D * 0.08, 40), fireMat);
+  fire.rotation.x = Math.PI / 2; fire.position.set(W * 0.04, BH * 0.82, D / 2 + D * 0.02); grp.add(fire);
+  const bezel = new THREE.Mesh(new THREE.PlaneGeometry(W * 0.56, BH * 0.3), black);
+  bezel.position.set(W * 0.04, BH * 0.56, D / 2 + H * 0.001); grp.add(bezel);
+  const screenCanvas = document.createElement("canvas"); screenCanvas.width = 200; screenCanvas.height = 280;
+  const screenTex = new THREE.CanvasTexture(screenCanvas); screenTex.colorSpace = THREE.SRGBColorSpace;
+  const screenMat = new THREE.MeshBasicMaterial({ map: screenTex, toneMapped: false });
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(W * 0.46, W * 0.46 * 1.4), screenMat);
+  screen.position.set(W * 0.04, BH * 0.56, D / 2 + H * 0.002); grp.add(screen);
+  for (const y of [0.3, 0.21]) {
+    const btn = new THREE.Mesh(new THREE.CylinderGeometry(W * 0.075, W * 0.075, D * 0.06, 24), fireMat);
+    btn.rotation.x = Math.PI / 2; btn.position.set(W * 0.04, BH * y, D / 2 + D * 0.015); grp.add(btn);
+  }
+  const usb = new THREE.Mesh(new RoundedBoxGeometry(W * 0.26, BH * 0.028, D * 0.05, 2, BH * 0.012), black);
+  usb.position.set(W * 0.04, BH * 0.075, D / 2); grp.add(usb);
+  let y = BH;
+  const stack = (geo, mat, h) => { const m = new THREE.Mesh(geo, mat); m.position.y = y + h / 2; grp.add(m); y += h; return m; };
+  stack(new THREE.CylinderGeometry(W * 0.42, W * 0.44, H * 0.02, 40), chrome, H * 0.02);
+  stack(new THREE.CylinderGeometry(W * 0.38, W * 0.38, H * 0.045, 40), chrome, H * 0.045);
+  const glassH = H * 0.2, glassY = y;
+  stack(new THREE.CylinderGeometry(W * 0.36, W * 0.36, glassH, 40, 1, true), new THREE.MeshPhysicalMaterial({
+    color: 0xe6eef5, metalness: 0, roughness: 0.04, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false }), glassH);
+  const liquid = new THREE.Mesh(new THREE.CylinderGeometry(W * 0.33, W * 0.33, 1, 32),
+    new THREE.MeshStandardMaterial({ color: 0xd9a441, transparent: true, opacity: 0.6, roughness: 0.2, depthWrite: false }));
+  grp.add(liquid);
+  const coilMat = new THREE.MeshBasicMaterial({ color: 0xffa94d, transparent: true, opacity: 0.15, blending: THREE.AdditiveBlending, depthWrite: false });
+  const coil = new THREE.Mesh(new THREE.CylinderGeometry(W * 0.07, W * 0.07, glassH, 16), coilMat);
+  coil.position.y = glassY + glassH / 2; grp.add(coil);
+  stack(new THREE.CylinderGeometry(W * 0.38, W * 0.38, H * 0.035, 40), chrome, H * 0.035);
+  stack(new THREE.CylinderGeometry(W * 0.385, W * 0.385, H * 0.03, 40), black, H * 0.03);
+  stack(new THREE.CylinderGeometry(W * 0.2, W * 0.27, H * 0.12, 40),
+    new THREE.MeshStandardMaterial({ color: 0x0b0c0e, metalness: 0.1, roughness: 0.22 }), H * 0.12);
+  return { group: grp, top: y, BH, bodyGeo, trimMat, fireMat, screenMat, screenCanvas, screenTex, liquid, glassH, glassY, coilMat, lastScreen: "" };
+}
+function setColourway(name) {
+  const v = rig.vape; if (!v) return;
+  const c = VAPE_COLOURS[name] || VAPE_COLOURS.lagoon;
+  const top = new THREE.Color(c.top), bottom = new THREE.Color(c.bottom), tmp = new THREE.Color();
+  const pos = v.bodyGeo.attributes.position, col = v.bodyGeo.attributes.color;
+  for (let i = 0; i < pos.count; i++) {
+    const t = Math.min(1, Math.max(0, (pos.getY(i) / v.BH + 0.5) * 1.15 - 0.1));
+    tmp.copy(bottom).lerp(top, t); col.setXYZ(i, tmp.r, tmp.g, tmp.b);
+  }
+  col.needsUpdate = true;
+  v.trimMat.color.set(c.trim);
+  v.fireMat.color.copy(top).lerp(bottom, 0.15);
+}
+function drawVapeScreen(v, puffs, firing) {
+  const key = puffs + "|" + firing;
+  if (v.lastScreen === key) return;
+  v.lastScreen = key;
+  const c = v.screenCanvas, x = c.getContext("2d"), w = c.width;
+  x.fillStyle = "#040507"; x.fillRect(0, 0, w, c.height);
+  x.textAlign = "center"; x.fillStyle = firing ? "#ffd36b" : "#dfe6f0";
+  x.font = "500 17px 'Martian Mono', monospace"; x.fillText(firing ? "FIRING" : "SMART", w / 2, 34);
+  x.font = "800 118px 'Big Shoulders Display', 'Arial Narrow', sans-serif"; x.fillText("60", w / 2 - 14, 160);
+  x.font = "600 22px 'Martian Mono', monospace"; x.fillText("W", w / 2 + 62, 160);
+  x.fillStyle = "#9aa6b8"; x.font = "400 16px 'Martian Mono', monospace"; x.fillText(`PUFF ${puffs}`, w / 2, 212);
+  x.strokeStyle = "#9aa6b8"; x.lineWidth = 2; x.strokeRect(w / 2 - 34, 234, 60, 22); x.fillRect(w / 2 + 26, 240, 5, 10);
+  x.fillStyle = firing ? "#ffd36b" : "#4cc58a"; x.fillRect(w / 2 - 31, 237, 40, 16);
+  v.screenTex.needsUpdate = true;
+}
+$("vape-colour").addEventListener("change", (e) => setColourway(e.target.value));
+$("view").addEventListener("change", (e) => frameRig(e.target.value, true));
+$("scale").addEventListener("change", (e) => { applyVapeScale(e.target.value); frameRig(rig.view, true); });
+
+// ---------------------------------------------------------------- downloaded models, used when present
+// A reduced vape GLB may sit next to the replay as vape_model.bin (build/models/ for the live
+// server). Without it the box mod stays. The fly is always the drawn one.
+const VAPE_MODEL = { file: "vape_model", rot: [0, 0, 0],
+  credit: "Vape model: Geek pulse by imzyrexx-tsu, CC-BY 4.0." };
+
+async function loadGlb(file) {
+  try {
+    const u8 = await bytes(MODE === "live" ? `models/${file}.bin` : `${file}.bin`);
+    return await new GLTFLoader().parseAsync(u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength), "");
+  } catch (_) {
+    return null;
+  }
+}
+function measure(obj, rot) {
+  obj.rotation.set(rot[0], rot[1], rot[2]);
+  obj.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(obj);
+  return { size: box.getSize(V3()), center: box.getCenter(V3()) };
+}
+function addCredit(text) {
+  const el = $("model-credits");
+  el.textContent = (el.textContent ? el.textContent + " " : "") + text;
+}
+async function loadModels() {
+  await loadFlyBody();
+  const vape = await loadGlb(VAPE_MODEL.file);
+  if (vape && rig.vape) {
+    const v = rig.vape, obj = vape.scene, m = measure(obj, VAPE_MODEL.rot);
+    const holder = new THREE.Group();
+    obj.position.set(-m.center.x, -(m.center.y - m.size.y / 2), -m.center.z);
+    holder.add(obj);
+    holder.scale.setScalar(v.top / Math.max(1e-6, m.size.y));
+    for (const c of [...v.group.children]) c.visible = false;
+    v.group.add(holder);
+    $("vape-colour").hidden = true;
+    rig.vapeModel = holder;
+    addCredit(VAPE_MODEL.credit);
+  }
+}
+
+const SIDE_DIR = V3(0, 0.2, 1).normalize();   // straight across the rig, a little from above
+function frameRig(mode = rig.view || "side", animate = false) {
+  rig.view = mode;
+  const parts = mode === "rig"
+    ? [rig.flyModel || rig.body, rig.tether, (rig.pad ? rig.pad.group : rig.ballG), rig.vape && rig.vape.group, rig.tubeMesh, rig.nozzleMesh, rig.stand && rig.stand.visible ? rig.stand : null, brainView]
+    : mode === "side"
+      ? [rig.flyModel || rig.body, (rig.pad ? rig.pad.group : rig.ballG), rig.vape && rig.vape.group, rig.nozzleMesh, brainView]
+      : [rig.flyModel || rig.body];
+  const box = new THREE.Box3();
+  for (const part of parts) if (part) box.expandByObject(part);
+  if (box.isEmpty()) return;
+  const size = box.getSize(V3()), center = box.getCenter(V3());
+  const r = canvas.getBoundingClientRect(), aspect = r.width / Math.max(1, r.height);
+  const tan2 = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  let dist;
+  if (mode === "side") {
+    dist = Math.max(size.x / aspect, size.y) / tan2 * 1.55;
+    center.y -= size.y * 0.1;
+  } else {
+    dist = Math.max(size.x / aspect, size.y, size.z * 0.6) / tan2 * (mode === "rig" ? 1.1 : 2.6);
+  }
+  rig.userMoved = false;
+  const away = camera.position.clone().sub(controls.target);
+  const dir = mode === "side" ? SIDE_DIR.clone()
+    : animate && away.lengthSq() > 1e-12 ? away.normalize() : V3(-0.5, 0.32, 1).normalize();
+  const pos = center.clone().add(dir.multiplyScalar(dist));
+  camera.near = dist * 0.002; camera.far = dist * 60; camera.updateProjectionMatrix();
+  controls.minDistance = dist * 0.05; controls.maxDistance = dist * 8;
+  if (animate && !reduced) {
+    rig.cam = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos, t1: center, start: now(), dur: 0.9 };
+  } else {
+    rig.cam = null;
+    controls.target.copy(center);
+    camera.position.copy(pos);
+    controls.update();
+  }
+}
+
+// real sizes around the drawn fly, taken as 3 mm long: 8 mm tether, 6 mm ball, nozzle 1.5 mm from the face
+const FLY_SCALE = 2.5;
+function scaleRig(F) {
+  const mm = F.mm;
+  // scale a group about a point it already has and move that point to target, whatever the group's current transform
+  const scaleAbout = (grp, pivot, target, f) => {
+    grp.scale.multiplyScalar(f);
+    grp.position.sub(pivot).multiplyScalar(f).add(target);
+  };
+  const kt = (8 * mm) / rig.tetherLen;
+  rig.tetherLabel.sub(rig.glue).multiplyScalar(kt).add(F.glue);
+  scaleAbout(rig.tether, rig.glue, F.glue, kt);
+  rig.glue.copy(F.glue);
+  rig.tetherLen = 8 * mm;
+  const R2 = 3 * mm, kb = R2 / rig.R;
+  const bc2 = V3(F.feet.x, F.feet.y - R2 * 0.99, F.feet.z);
+  rig.ballLabel.sub(rig.ballC).multiplyScalar(kb).add(bc2);
+  scaleAbout(rig.ballG, rig.ballC, bc2, kb);
+  rig.ballC.copy(bc2); rig.R = R2;
+  const tip = F.face.clone().add(V3(-1.5 * mm, -0.2 * mm, 0));
+  const base = tip.clone().add(V3(-2 * mm, 0, 0));        // a short 2 mm nozzle
+  rig.nozzleR = [0.6 * mm, 0.25 * mm];
+  rig.fit = { mm, face: F.face, tip, base, floorY: bc2.y - R2 * 1.35, vH0: rig.fit ? rig.fit.vH0 : rig.vH, top: rig.vape.top, optZ: F.optZ, flyLen: F.flyLen };
+  applyVapeScale($("scale").value);
+  rig.antenna = F.face;
+  rig.nozzleLabel.copy(base.clone().lerp(tip, 0.3).add(V3(0, -2 * mm, 0)));
+  rig.antennaLabel.copy(F.face.clone().add(V3(0, 1.2 * mm, 0)));
+  rig.vapor.material.uniforms.uScale.value = 0.3 * F.flyLen;
+  placeBrainView(F.flyLen);
+  frameRig($("view").value);
+}
+
+// the vape at one of two sizes: a real 130 mm box mod, or one as tall as the fly standing beside it
+function applyVapeScale(mode) {
+  const f = rig.fit;
+  if (!f || !rig.vape) return;
+  const real = mode === "real", mm = f.mm, vg = rig.vape.group;
+  const height = real ? 130 * mm : f.flyLen * 0.8;   // fly-sized mode: the fly is a little bigger than the vape
+  vg.scale.setScalar(height / f.top);
+  // real: on the bench, well away from the fly; fly-sized: on a small stand level with the fly's feet, just past the nozzle
+  const standY = rig.ballC.y + rig.R * 0.9;
+  const baseY = real ? f.floorY : standY;
+  vg.position.set(f.face.x - (real ? 55 * mm : 3.5 * mm + height * 0.35), baseY, f.optZ - (real ? 30 * mm : height * 0.45));
+  vg.updateMatrixWorld(true);
+  if (!rig.stand) {
+    rig.stand = new THREE.Group();
+    rig.stand.add(new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.08, 40), shellMat(0xc9d3e6, 0.55)));
+    rig.stand.add(tube(V3(0, -0.04, 0), V3(0, -1, 0), 0.08, 0.12, 0xc9d3e6, 0.45));
+    rig.group.add(rig.stand);
+  }
+  rig.stand.visible = !real;
+  if (!real) {
+    rig.stand.position.set(vg.position.x, baseY - height * 0.02, vg.position.z);
+    rig.stand.scale.set(height * 0.45, (baseY - f.floorY), height * 0.45);
+  }
+  rig.vH = height;
+  rig.tubeR = real ? 1.6 * mm : Math.max(0.3 * mm, height * 0.02);
+  rig.headRx = real ? 8 * mm : Math.max(2 * mm, height * 0.4);
+  rig.vTip = vg.localToWorld(V3(0, f.top, 0));
+  rig.vapeLabel.copy(vg.localToWorld(V3(f.vH0 * 0.3, f.vH0 * 0.28, 0)));
+  plumb(f.base, f.tip);
+  rig.tubeGlow.material.size = rig.tubeR * 2.2;
+  rig.scaleMode = mode;
+}
+
+function plumb(nozzleBase, nozzleTip) {
+  const g = rig.group, vTip = rig.vTip, vH = rig.vH, hx = rig.headRx;
+  for (const k of ["nozzleMesh", "tubeMesh"]) if (rig[k]) { g.remove(rig[k]); rig[k].geometry.dispose(); }
+  const nr = rig.nozzleR || [0.04, 0.012];
+  rig.nozzleMesh = tube(nozzleBase, nozzleTip, nr[0], nr[1], 0xc9d3e6, 0.55);
+  g.add(rig.nozzleMesh);
+  rig.curve = new THREE.CatmullRomCurve3([
+    vTip.clone(), vTip.clone().add(V3(0, vH * 0.12, 0)),
+    V3((vTip.x + nozzleBase.x) / 2, Math.max(vTip.y, nozzleBase.y) + vH * 0.1, (vTip.z + nozzleBase.z) / 2),
+    nozzleBase.clone().add(V3(-hx * 0.5, 0, 0)), nozzleBase.clone()]);
+  rig.tubeMesh = new THREE.Mesh(new THREE.TubeGeometry(rig.curve, 80, rig.tubeR, 10, false), shellMat(0xa9c4d8, 0.4));
+  g.add(rig.tubeMesh);
+  rig.nozzleTip = nozzleTip.clone();
+}
+
+function makePad(o) {
+  const PADS = [["AIR", 0xc9d3e6, "#dfe6f0"], ["PUFF", 0xe0b64a, "#e0b64a"], ["WASH", 0x5fd0d8, "#5fd0d8"]];
+  if (rig.pad) rig.group.remove(rig.pad.group);
+  const { xs, zc, capX, capZ, capH, padH, capTop } = o;
+  const padTop = capTop - capH, padZ = capZ * 1.25;
+  const x0 = Math.min(...xs) - capX * 0.75, x1 = Math.max(...xs) + capX * 0.75;
+  const group = new THREE.Group();
+  rig.group.add(group);
+  const base = new THREE.Mesh(new RoundedBoxGeometry(x1 - x0, padH, padZ, 4, padH * 0.3),
+    new THREE.MeshStandardMaterial({ color: 0x1a1f28, metalness: 0.3, roughness: 0.45 }));
+  base.position.set((x0 + x1) / 2, padTop - padH / 2, zc);
+  group.add(base);
+  const caps = [];
+  PADS.forEach(([name, glow, css], j) => {
+    const mat = new THREE.MeshStandardMaterial({ color: 0x2a303b, metalness: 0.2, roughness: 0.35, emissive: glow, emissiveIntensity: 0 });
+    const cap = new THREE.Mesh(new RoundedBoxGeometry(capX, capH, capZ, 4, capH * 0.35), mat);
+    cap.position.set(xs[j], padTop + capH / 2, zc);
+    group.add(cap);
+    const c = document.createElement("canvas"); c.width = 256; c.height = 96;
+    const x = c.getContext("2d");
+    x.fillStyle = css; x.font = "700 48px 'Martian Mono', monospace"; x.textAlign = "center"; x.textBaseline = "middle";
+    x.fillText(name, 128, 50);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+    const labelMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.4, depthWrite: false, toneMapped: false });
+    let lw = capX * 1.1, lh = lw * 96 / 256;
+    if (lh > padH * 0.8) { lw *= padH * 0.8 / lh; lh = padH * 0.8; }
+    const label = new THREE.Mesh(new THREE.PlaneGeometry(lw, lh), labelMat);
+    label.position.set(xs[j], padTop - padH / 2, zc + padZ / 2 + padH * 0.02);
+    group.add(label);
+    caps.push({ cap, mat, labelMat, restY: padTop + capH / 2, press: 0 });
+  });
+  rig.pad = { group, caps, capH };
+  if (!rig.padLabel) { rig.padLabel = V3(); addLabel("button pad", rig.padLabel); }
+  rig.padLabel.set((x0 + x1) / 2, padTop - padH * 1.5, zc + padZ / 2);
+}
+
+// ---------------------------------------------------------------- the fruit fly body: NeuroMechFly v2
+const NMF = { file: "fly_nmf",
+  credit: "Fruit fly body: NeuroMechFly v2 by the Ramdya lab at EPFL, from flygym, Apache-2.0, converted for this page." };
+const AXES = { x: V3(1, 0, 0), y: V3(0, 1, 0), z: V3(0, 0, 1) };
+const _q = new THREE.Quaternion();
+function poseSegment(node, override) {
+  const ud = node.userData;
+  const q = new THREE.Quaternion(ud.rest[1], ud.rest[2], ud.rest[3], ud.rest[0]);
+  ud.joints.forEach(([ax, ang], i) => {
+    const a = override && override[i] !== undefined ? override[i] : ang;
+    q.multiply(_q.setFromAxisAngle(AXES[ax], a));
+  });
+  node.quaternion.copy(q);
+}
+
+async function loadFlyBody() {
+  const gl = await loadGlb(NMF.file);
+  if (!gl || !rig.ready || !rig.optic || !(rig.optic.span > 0)) return;
+  const root = gl.scene, holder = new THREE.Group(), seg = {};
+  holder.add(root);
+  root.traverse((o) => {
+    if (o.userData && o.userData.rest) seg[o.name] = o;
+    if (!o.isMesh) return;
+    const name = o.material.name || "";
+    const leg = /coxa|trochanterfemur|tibia|tarsus/.test(name);
+    const opacity = name === "wing" ? 0.18 : name === "eye" ? 0.4 : leg ? 0.9 : 0.16;
+    o.material = new THREE.MeshStandardMaterial({ color: o.material.color.clone(), roughness: 0.6, metalness: 0.05,
+      transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide });
+  });
+  if (!seg.l_eye || !seg.r_eye || !seg.c_head) return;
+  // a segment's own mesh only: expandByObject would also take in every child segment (the thorax holds the legs)
+  const ownMesh = (n) => seg[n] && (seg[n].isMesh ? seg[n] : seg[n].children.find((c) => c.isMesh && !c.userData.rest));
+  const box = (names) => {
+    const b = new THREE.Box3();
+    for (const n of names) {
+      const mesh = ownMesh(n);
+      if (!mesh) continue;
+      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+      b.union(mesh.geometry.boundingBox.clone().applyMatrix4(mesh.matrixWorld));
+    }
+    return b;
+  };
+  holder.updateMatrixWorld(true);
+  const eL = box(["l_eye"]).getCenter(V3()), eR = box(["r_eye"]).getCenter(V3());
+  const eyeMid = eL.clone().add(eR).multiplyScalar(0.5), eyeSpan = Math.abs(eR.z - eL.z) || eR.distanceTo(eL);
+  // compound eyes over the optic lobes, at the span that puts the lobes just inside the eyes
+  const s = rig.optic.span * 1.25 / eyeSpan;
+  holder.scale.setScalar(s);
+  holder.position.copy(rig.optic.mid).sub(eyeMid.clone().multiplyScalar(s));
+  rig.group.add(holder);
+  holder.updateMatrixWorld(true);
+
+  const bodyBox = box(["c_head", "c_thorax", "c_abdomen12", "c_abdomen3", "c_abdomen4", "c_abdomen5", "c_abdomen6"]);
+  const headBox = box(["c_head"]), thoraxBox = box(["c_thorax"]);
+  const eyeW = rig.optic.mid.clone();
+  const pairs = ["f", "m", "h"], feet = pairs.map((p) => {
+    const l = box([`l${p}_tarsus5`]), r = box([`r${p}_tarsus5`]);
+    return { x: (l.getCenter(V3()).x + r.getCenter(V3()).x) / 2, y: Math.min(l.min.y, r.min.y),
+      zl: l.getCenter(V3()).z, zr: r.getCenter(V3()).z };
+  });
+  const flyLen = bodyBox.max.x - bodyBox.min.x;
+  const zc = (feet[0].zl + feet[0].zr) / 2, zSpan = Math.max(...feet.map((f) => Math.abs(f.zr - f.zl)));
+  const capTop = Math.min(...feet.map((f) => f.y));
+  const capH = flyLen * 0.04;
+  makePad({ xs: feet.map((f) => f.x), zc, capX: flyLen * 0.16, capZ: zSpan * 1.12, capH, padH: flyLen * 0.07, capTop });
+
+  // each pressing leg bends at the coxa-femur pitch joint; direction and size measured on the model
+  const legs = [];
+  const capDrop = capH * 0.55;
+  pairs.forEach((p, j) => ["l", "r"].forEach((side) => {
+    const node = seg[`${side}${p}_trochanterfemur`], foot = seg[`${side}${p}_tarsus5`];
+    if (!node || !foot) return;
+    const idx = node.userData.joints.findIndex(([ax]) => ax === "y");
+    if (idx < 0) return;
+    const base = node.userData.joints[idx][1];
+    const footY = () => { holder.updateMatrixWorld(true); return new THREE.Box3().setFromObject(foot).min.y; };
+    poseSegment(node, { [idx]: base + 0.08 }); const yp = footY();
+    poseSegment(node, { [idx]: base - 0.08 }); const ym = footY();
+    poseSegment(node);
+    const slope = (yp - ym) / 0.16;
+    legs.push({ j, node, idx, base, sign: slope < 0 ? 1 : -1, amp: Math.min(0.35, capDrop / Math.max(1e-9, Math.abs(slope))) });
+  }));
+  // wings: find which way each wing's roll joint (a sweep about the vertical axis) spreads it outward
+  const wings = [];
+  for (const side of ["l", "r"]) {
+    const node = seg[`${side}_wing`];
+    if (!node) continue;
+    const joints = node.userData.joints, idx = {};
+    joints.forEach(([ax], i) => { idx[ax] = i; });
+    if (idx.z === undefined) continue;
+    const base = joints.map(([, a]) => a);
+    const lateral = () => { holder.updateMatrixWorld(true); return Math.abs(box([`${side}_wing`]).getCenter(V3()).z - eyeW.z); };
+    poseSegment(node, { [idx.z]: base[idx.z] + 0.4 }); const plus = lateral();
+    poseSegment(node, { [idx.z]: base[idx.z] - 0.4 }); const minus = lateral();
+    poseSegment(node);
+    wings.push({ node, idx, base, spread: plus > minus ? 1 : -1 });
+  }
+  rig.flap = 0; rig.wingPhase = 0; rig.dopaBurst = 0; rig.dopaLevel = rig.dopaLevel || 0; rig.beatsShown = -1;
+  rig.wingLabel = box(["l_wing", "r_wing"]).getCenter(V3()).add(V3(0, flyLen * 0.28, 0));
+  rig.wingLabelEl = addLabel("wings", rig.wingLabel, "hot");
+  rig.nmf = { holder, seg, legs, wings };
+
+  rig.body.visible = false;
+  for (const L of rig.legs) L.line.visible = false;
+  rig.flyModel = holder;
+  rig.glue.copy(rig.glue);
+  scaleRig({ mm: flyLen / (3.0 * FLY_SCALE), flyLen, optZ: eyeW.z,
+    glue: V3(thoraxBox.getCenter(V3()).x, thoraxBox.max.y, thoraxBox.getCenter(V3()).z),
+    face: V3(headBox.min.x, eyeW.y, eyeW.z),
+    feet: V3((feet[0].x + feet[2].x) / 2, capTop - capH, zc) });
+  rig.antennaLabel.copy(V3(headBox.min.x, headBox.max.y + flyLen * 0.08, eyeW.z));
+  addCredit(NMF.credit);
+}
+
+// ---------------------------------------------------------------- the nervous system, enlarged beside the fly
+let neuronPoints = null, brainView = null, pointBoost = 1;
+function placeBrainView(flyLen) {
+  if (!neuronPoints || !rig.ready) return;
+  if (!brainView) {
+    brainView = new THREE.Group();
+    scene.add(brainView);
+    scene.remove(neuronPoints);
+    brainView.add(neuronPoints);
+    // measure the placed neurons only (hidden ones are parked at the origin)
+    const p = neuronPoints.geometry.attributes.position.array, v = neuronPoints.geometry.attributes.aVis.array;
+    const lo = V3(Infinity, Infinity, Infinity), hi = V3(-Infinity, -Infinity, -Infinity);
+    for (let i = 0; i < v.length; i++) if (v[i] > 0) {
+      lo.min(_v.set(p[3 * i], p[3 * i + 1], p[3 * i + 2])); hi.max(_v);
+    }
+    rig.brainLo = lo; rig.brainHi = hi;
+    rig.brainCenter = lo.clone().add(hi).multiplyScalar(0.5);
+    rig.brainSize = hi.clone().sub(lo);
+    neuronPoints.position.copy(rig.brainCenter).multiplyScalar(-1);
+    // face-on: the long axis runs down the screen (brain on top), the optic lobes spread left and right
+    brainView.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(V3(0, -1, 0), V3(0, 0, -1), V3(1, 0, 0)));
+    rig.connector = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V3(), V3()]),
+      new THREE.LineDashedMaterial({ color: 0x6f7c93, dashSize: 1, gapSize: 1, transparent: true, opacity: 0.7, depthTest: false }));
+    rig.connector.frustumCulled = false;
+    scene.add(rig.connector);
+    rig.brainLabel = V3();
+    addLabel("nervous system, enlarged", rig.brainLabel);
+  }
+  const flyBox = new THREE.Box3().expandByObject(rig.flyModel || rig.body);
+  if (rig.pad) flyBox.union(new THREE.Box3().setFromObject(rig.pad.group));
+  const height = (flyBox.max.y - flyBox.min.y) * 1.6;
+  const k = height / Math.max(1e-6, rig.brainSize.x);  // the long axis (brain to nerve cord) becomes the height
+  brainView.scale.setScalar(k);
+  brainView.position.set(flyBox.max.x + flyLen * 0.45 + rig.brainSize.z * k / 2,
+    (flyBox.min.y + flyBox.max.y) / 2, (flyBox.min.z + flyBox.max.z) / 2);
+  brainView.updateMatrixWorld(true);
+  pointBoost = Math.max(1, Math.min(2.4, k / 2.2));
+  setFocus(+$("region").value);
+  // the dopamine pulse and its label follow the mushroom body to its enlarged place
+  rig.kc.copy(neuronPoints.localToWorld(rig.kcLocal.clone()));
+  rig.daAnchor.copy(rig.kc).add(V3(0, height * 0.12, 0));
+  rig.pulseSize = rig.brainSize.z * k * 0.08;
+  // dashed line from the fly's head to the front of the brain
+  const front = neuronPoints.localToWorld(V3(rig.brainLo.x, rig.brainCenter.y, rig.brainCenter.z));
+  const head = rig.optic ? rig.optic.mid.clone() : front.clone();
+  const a = rig.connector.geometry.attributes.position;
+  a.setXYZ(0, head.x, head.y, head.z); a.setXYZ(1, front.x, front.y, front.z); a.needsUpdate = true;
+  rig.connector.computeLineDistances();
+  rig.connector.material.dashSize = rig.connector.material.gapSize = flyLen * 0.05;
+  rig.brainLabel.copy(front).add(V3(0, height * 0.06, 0));
+}
+
+function firePulse() {
+  if (!rig.ready) return;
+  const m = new THREE.Mesh(new THREE.RingGeometry(0.86, 1, 64), glowMat(0xe0b64a, 0.9));
+  m.position.copy(rig.kc); rig.group.add(m);
+  rig.dopaBurst = 1;
+  rig.pulses.push({ mesh: m, t0: now() });
+}
+
+function rigTelemetry(h, jumped) {
+  const puffing = h.puffing !== undefined ? h.puffing : /puff$/.test(h.phase || "");
+  const hold = MODE === "replay" ? 0.9 / Math.max(0.5, +$("speed").value) : 0.45;
+  if (puffing && !jumped) rig.emitUntil = now() + hold;
+  rig.turn = Math.max(-1, Math.min(1, h.turn || 0));
+  rig.speed = Math.max(-1, Math.min(1, h.speed || 0));
+  rig.puffs = h.puffs || 0;
+  if (h.mb && h.mb.rewards !== undefined) rig.dopaLevel = 1 - Math.exp(-h.mb.rewards / 60);
+  rig.phase = (h.phase || "").replace("base-", "");
+  if (h.dopamine && !jumped) firePulse();
+}
+
+function rigUpdate(dt) {
+  if (!rig.ready) return;
+  const t = now(), vis = rig.group.visible, emitting = t < rig.emitUntil;
+  if (rig.cam) {
+    const u = Math.min(1, (t - rig.cam.start) / rig.cam.dur), e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+    camera.position.lerpVectors(rig.cam.p0, rig.cam.p1, e);
+    controls.target.lerpVectors(rig.cam.t0, rig.cam.t1, e);
+    if (u >= 1) rig.cam = null;
+  }
+  rig.glow += ((emitting ? 1 : 0) - rig.glow) * (1 - Math.exp(-dt * 7));
+  const vv = rig.vape;
+  if (vv) {
+    vv.coilMat.opacity = 0.1 + 0.9 * rig.glow;
+    vv.screenMat.color.setScalar(0.6 + 0.4 * rig.glow);
+    drawVapeScreen(vv, rig.puffs || 0, rig.glow > 0.5);
+    const level = Math.max(0.1, 1 - (rig.puffs || 0) / 220);
+    vv.liquid.scale.y = vv.glassH * level;
+    vv.liquid.position.y = vv.glassY + vv.glassH * level / 2;
+  }
+
+  const vp = rig.vp, reach = rig.antenna.distanceTo(rig.nozzleTip);
+  const spawn = (x, y, z, vx, vy, vz, life) => {
+    const i = vp.cursor; vp.cursor = (vp.cursor + 1) % vp.n;
+    vp.pos[3 * i] = x; vp.pos[3 * i + 1] = y; vp.pos[3 * i + 2] = z;
+    vp.vel[3 * i] = vx; vp.vel[3 * i + 1] = vy; vp.vel[3 * i + 2] = vz;
+    vp.age[i] = 0; vp.life[i] = life;
+  };
+  if (emitting && vis) {
+    // a thick jet from the nozzle into the face
+    rig.carry += dt * 850;
+    while (rig.carry >= 1) {
+      rig.carry -= 1;
+      const n = rig.nozzleTip;
+      spawn(n.x, n.y + (Math.random() - 0.5) * reach * 0.08, n.z + (Math.random() - 0.5) * reach * 0.08,
+        reach * (0.8 + Math.random() * 0.7), (Math.random() - 0.4) * reach * 0.45, (Math.random() - 0.5) * reach * 0.5,
+        2.2 + Math.random() * 1.6);
+    }
+    // wisps curling up out of the vape's mouthpiece
+    if (rig.vTip) {
+      rig.carryTip = (rig.carryTip || 0) + dt * 160;
+      while (rig.carryTip >= 1) {
+        rig.carryTip -= 1;
+        const v = rig.vTip;
+        spawn(v.x + (Math.random() - 0.5) * reach * 0.1, v.y, v.z + (Math.random() - 0.5) * reach * 0.1,
+          (Math.random() - 0.5) * reach * 0.3, reach * (0.5 + Math.random() * 0.5), (Math.random() - 0.5) * reach * 0.3,
+          1.8 + Math.random() * 1.4);
+      }
+    }
+  }
+  const drag = Math.exp(-dt * 0.9);
+  for (let i = 0; i < vp.n; i++) {
+    if (vp.age[i] >= 1) continue;
+    vp.age[i] = Math.min(1, vp.age[i] + dt / vp.life[i]);
+    vp.vel[3 * i] *= drag; vp.vel[3 * i + 1] = vp.vel[3 * i + 1] * drag + reach * 0.08 * dt; vp.vel[3 * i + 2] *= drag;
+    vp.pos[3 * i] += vp.vel[3 * i] * dt; vp.pos[3 * i + 1] += vp.vel[3 * i + 1] * dt; vp.pos[3 * i + 2] += vp.vel[3 * i + 2] * dt;
+  }
+  rig.vapor.geometry.attributes.position.needsUpdate = true;
+  rig.vapor.geometry.attributes.aAge.needsUpdate = true;
+
+  rig.tubeGlow.material.opacity = 0.85 * rig.glow;
+  const nt = rig.tp.length / 3;
+  for (let j = 0; j < nt; j++) {
+    rig.curve.getPointAt((t * 0.8 + j / nt) % 1, _v);
+    rig.tp[3 * j] = _v.x; rig.tp[3 * j + 1] = _v.y; rig.tp[3 * j + 2] = _v.z;
+  }
+  rig.tubeGlow.geometry.attributes.position.needsUpdate = true;
+
+  // the pad: the leg pair over the current phase's button holds it down and lights it
+  if (rig.pad) {
+    const active = { air: 0, puff: 1, wash: 2 }[rig.phase];
+    const kp = 1 - Math.exp(-dt * 10);
+    rig.pad.caps.forEach((c, j) => {
+      c.press += ((j === active ? 1 : 0) - c.press) * kp;
+      const bob = j === active ? 0.85 + 0.15 * Math.sin(t * 9) : 1;
+      c.cap.position.y = c.restY - rig.pad.capH * 0.55 * c.press * bob;
+      c.mat.emissiveIntensity = 1.4 * c.press;
+      c.labelMat.opacity = 0.4 + 0.6 * c.press;
+    });
+    if (rig.nmf && rig.nmf.wings.length) {
+      // wings beat during a puff, slow through the wash and fold back in clean air (shown at 11 strokes a second)
+      // how fast they beat follows dopamine: a burst after each reward, and a rate that climbs with rewards so far
+      rig.dopaBurst *= Math.exp(-dt / 1.2);
+      const beats = 5 + 13 * rig.dopaLevel + 12 * rig.dopaBurst;
+      const target = Math.max(rig.phase === "puff" ? 1 : rig.phase === "wash" ? 0.35 : 0, 0.6 * rig.dopaBurst);
+      rig.flap += (target - rig.flap) * (1 - Math.exp(-dt * 3));
+      rig.wingPhase += dt * 2 * Math.PI * beats;
+      const shown = Math.round(beats);
+      if (shown !== rig.beatsShown) { rig.beatsShown = shown; rig.wingLabelEl.textContent = `wings ${shown} beats/s`; }
+      const sw = Math.sin(rig.wingPhase), cw = Math.cos(rig.wingPhase), f = rig.flap;
+      for (const W of rig.nmf.wings) {
+        const o = {};
+        o[W.idx.z] = W.base[W.idx.z] + W.spread * f * (1.1 + 0.8 * sw);
+        if (W.idx.x !== undefined) o[W.idx.x] = W.base[W.idx.x] + W.spread * f * 0.35 * cw;
+        if (W.idx.y !== undefined) o[W.idx.y] = W.base[W.idx.y] + f * 0.6 * cw;
+        poseSegment(W.node, o);
+      }
+    }
+    if (rig.nmf) for (const L of rig.nmf.legs) {
+      const bob = L.j === active ? 0.85 + 0.15 * Math.sin(t * 9) : 1;
+      poseSegment(L.node, { [L.idx]: L.base + L.sign * L.amp * rig.pad.caps[L.j].press * bob });
+    }
+    for (const L of rig.legs) {
+      const c = rig.pad.caps[L.j], fx = L.foot0.x, fz = L.foot0.z;
+      const fy = c.cap.position.y + rig.pad.capH / 2;
+      const arr = L.line.geometry.attributes.position.array;
+      arr[0] = L.hip.x; arr[1] = L.hip.y; arr[2] = L.hip.z;
+      arr[3] = (L.hip.x + fx) / 2; arr[4] = L.hip.y + rig.thR.y * (0.3 + 0.25 * c.press); arr[5] = L.hip.z + (fz - L.hip.z) * 0.75;
+      arr[6] = fx; arr[7] = fy; arr[8] = fz;
+      L.line.geometry.attributes.position.needsUpdate = true;
+    }
+  }
+
+  for (let j = rig.pulses.length - 1; j >= 0; j--) {
+    const p = rig.pulses[j], age = (t - p.t0) / 1.2;
+    if (age >= 1) { rig.group.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); rig.pulses.splice(j, 1); continue; }
+    const sz = (rig.pulseSize || rig.thR.z) * (0.2 + 1.6 * age);
+    p.mesh.scale.set(sz, sz, sz); p.mesh.material.opacity = 0.9 * (1 - age); p.mesh.quaternion.copy(camera.quaternion);
+  }
+  rig.daLabel.hidden = !rig.pulses.length;
+
+  if (vis) {
+    const r = canvas.getBoundingClientRect();
+    for (const L of rig.labels) {
+      if (L.el.hidden) continue;
+      _v.copy(L.anchor).project(camera);
+      L.el.style.opacity = _v.z > -1 && _v.z < 1 ? "" : "0";
+      L.el.style.transform = `translate(${((_v.x + 1) / 2 * r.width + 8).toFixed(1)}px, ${((1 - _v.y) / 2 * r.height).toFixed(1)}px) translateY(-50%)`;
+    }
+  }
+}
+
+// ---------------------------------------------------------------- HUD
+const hist = { w: [], nic: [], dead: [], sps: [], puff: [] };
+let tests = [];
+let baselineSps = null;
+let full = null;            // replay: whole-run series, drawn faint behind the played part
+
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+function niceMax(v) {
+  if (!(v > 0)) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  for (const m of [1, 2, 2.5, 5, 10]) if (v <= m * p) return m * p;
+  return 10 * p;
+}
+function shortNum(v) {
+  if (v >= 1e6) return (v / 1e6).toFixed(v >= 1e7 ? 0 : 1) + "M";
+  if (v >= 1e3) return (v / 1e3).toFixed(v >= 1e4 ? 0 : 1) + "k";
+  return v % 1 ? v.toFixed(1) : String(v);
+}
+
+function drawChart(id, series, faint, color, fixedMax) {
+  const c = $(id); if (!c) return;
+  const w = c.clientWidth, h = c.clientHeight; if (!w) return;
+  const dpr = Math.min(devicePixelRatio, 2);
+  c.width = w * dpr; c.height = h * dpr;
+  const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+  const all = faint || series;
+  const n = all.length;
+  const vmax = fixedMax || niceMax(Math.max(1e-9, ...all));
+  const padL = 34, padR = 6, padT = 6, padB = 6;
+  const X = (i) => padL + (n > 1 ? i / (n - 1) : 0) * (w - padL - padR);
+  const Y = (v) => padT + (1 - v / vmax) * (h - padT - padB);
+  g.font = `400 9px ${css("--mono")}`; g.fillStyle = css("--ink-3"); g.textAlign = "right"; g.textBaseline = "middle";
+  g.strokeStyle = css("--chart-grid"); g.lineWidth = 1;
+  for (const f of [0, 0.5, 1]) {
+    const y = Math.round(Y(vmax * f)) + 0.5;
+    g.beginPath(); g.moveTo(padL, y); g.lineTo(w - padR, y); g.stroke();
+    if (f !== 0.5) g.fillText(shortNum(vmax * f), padL - 5, y);
+  }
+  if (!n) return;
+  if (faint) {
+    g.strokeStyle = color; g.globalAlpha = 0.22; g.beginPath();
+    faint.forEach((v, i) => (i ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v)))); g.stroke(); g.globalAlpha = 1;
+  }
+  const m = series.length; if (!m) return;
+  g.beginPath(); g.moveTo(X(0), Y(0));
+  series.forEach((v, i) => g.lineTo(X(i), Y(v)));
+  g.lineTo(X(m - 1), Y(0)); g.closePath();
+  g.fillStyle = color; g.globalAlpha = 0.12; g.fill(); g.globalAlpha = 1;
+  g.beginPath(); series.forEach((v, i) => (i ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v))));
+  g.strokeStyle = color; g.lineWidth = 1.5; g.stroke();
+  g.beginPath(); g.arc(X(m - 1), Y(series[m - 1]), 3, 0, 6.283); g.fillStyle = color; g.fill();
+}
+function drawCharts() {
+  if (!hist.w.length && !full) return;
+  drawChart("c-nic", hist.nic, full && full.nic, css("--nicotine"));
+  drawChart("c-dead", hist.dead, full && full.dead, css("--dead"));
+  drawChart("c-sps", hist.sps, full && full.sps, css("--spikes"));
+}
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { drawCharts(); drawStrip(); });
+new MutationObserver(() => { drawCharts(); drawStrip(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+function buildPips() {
+  const box = $("pips"); box.textContent = "";
+  groups.walk.forEach((idx, j) => {
+    const d = document.createElement("div");
+    d.className = "pip"; d.dataset.idx = idx; d.textContent = groups.walk_labels[j] || "DN";
+    box.appendChild(d);
+  });
+}
+function updatePips() {
+  let alive = 0;
+  for (const el of $("pips").children) {
+    const dead = deadMask[+el.dataset.idx] === 1;
+    el.classList.toggle("dead", dead);
+    if (!dead) alive++;
+  }
+  $("walk-count").textContent = `${alive} of ${groups.walk.length} alive`;
+}
+
+function renderTests() {
+  const body = $("tests");
+  if (!tests.length) return;
+  body.textContent = "";
+  const first = tests[0].relative;
+  for (const t of tests.slice().reverse()) {
+    const tr = document.createElement("tr");
+    const empty = (x) => !(x.approach + x.avoid > 0);
+    const cell = (x) => empty(x) ? `<td title="none of the Kenyon cells that fired has an output synapse left">no output</td>` : `<td>${x.leaning.toFixed(3)}</td>`;
+    if (empty(t.eliquid) || empty(t.control)) {
+      tr.innerHTML = `<td>${t.puffs}</td>${cell(t.eliquid)}${cell(t.control)}<td>&mdash;</td>`;
+    } else {
+      const gap = t.relative, cls = gap > first + 1e-4 ? "up" : gap < first - 1e-4 ? "down" : "";
+      tr.innerHTML = `<td>${t.puffs}</td>${cell(t.eliquid)}${cell(t.control)}<td class="${cls}">${gap >= 0 ? "+" : ""}${gap.toFixed(4)}</td>`;
+    }
+    body.appendChild(tr);
+  }
+}
+
+function setPhase(phase) {
+  const p = (phase || "").replace("base-", "");
+  for (const s of document.querySelectorAll(".rigcycle span")) s.classList.toggle("on", s.dataset.ph === p);
+  $("phase-pill").textContent = phase && phase.startsWith("base-") ? `baseline \u00b7 ${p}` : (p || "\u2014");
+}
+
+function updateHud(h) {
+  if (h.baseline_sps) baselineSps = h.baseline_sps;
+  setPhase(h.phase);
+  $("puff-pill").textContent = `${fmt(h.puffs)} puff${h.puffs === 1 ? "" : "s"}`;
+  $("dead-num").textContent = fmt(h.dead);
+  $("dead-pct").textContent = `${(h.dead_frac * 100).toFixed(2)}%`;
+  $("m-half").textContent = `${(h.dead_frac * 100).toFixed(1)}% of 50%`;
+  $("m-half-bar").style.width = `${Math.min(100, h.dead_frac * 200)}%`;
+  $("m-half-bar").style.background = css("--dead");
+  if (baselineSps) {
+    const r = h.sps / baselineSps;
+    $("m-act").textContent = `${Math.round(r * 100)}% \u00b7 stops under 5%`;
+    $("m-act-bar").style.width = `${Math.min(100, r * 50)}%`;
+    $("m-act-bar").style.background = css("--spikes");
+  }
+  $("v-nic").textContent = h.nic.toFixed(2);
+  $("v-dead").textContent = fmt(h.dead);
+  $("v-sps").textContent = shortNum(Math.round(h.sps));
+  $("brain-time").textContent = `${((h.w + 1) * 0.024).toFixed(1)} s brain time`;
+  if (h.mb) $("mb-dep").textContent = `${fmt(h.mb.depressed || 0)} weakened`;
+  if (h.stop) {
+    $("state-pill").textContent = "Stopped"; $("state-pill").className = "pill stop";
+    $("stop-note").textContent = STOP_TEXT[h.stop] || `Stopped: ${h.stop}.`;
+  } else if (MODE === "live") {
+    $("state-pill").textContent = "Running"; $("state-pill").className = "pill run";
+  }
+}
+
+function markFirstDeath(h) {
+  if ($("first-death").dataset.set) return;
+  if (h.first_death) {
+    $("first-death").textContent = h.first_death.puffs ? `first died after ${h.first_death.puffs} puffs` : "first died in baseline";
+    $("first-death").dataset.set = "1";
+    return;
+  }
+  if (h.dead > 0) {
+    $("first-death").textContent = h.puffs ? `first died after ${h.puffs} puffs` : "first died in baseline";
+    $("first-death").dataset.set = "1";
+  }
+}
+
+// ---------------------------------------------------------------- live
+function parse(buf) {
+  const dv = new DataView(buf);
+  let o = 0;
+  const hl = dv.getUint32(o, true); o += 4;
+  const header = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, o, hl))); o += hl;
+  const arr = () => { const n = dv.getUint32(o, true); o += 4; const a = new Uint32Array(buf.slice(o, o + 4 * n)); o += 4 * n; return a; };
+  const fired = arr(), dead = arr(), risk = arr();
+  const lvl = new Uint8Array(buf, o, risk.length);
+  return { header, fired, dead, risk, lvl };
+}
+
+function pushHist(h) {
+  if (h.phase && h.phase.startsWith("base-") && h.sps) {
+    hist._base = (hist._base || []); hist._base.push(h.sps);
+    baselineSps = hist._base.reduce((a, b) => a + b, 0) / hist._base.length;
+  }
+  hist.w.push(h.w); hist.nic.push(h.nic); hist.dead.push(h.dead); hist.sps.push(h.sps);
+  const cap = 1500;
+  if (hist.w.length > cap) for (const k of ["w", "nic", "dead", "sps"]) hist[k].splice(0, hist[k].length - cap);
+  if (h.test) { tests.push(h.test); renderTests(); }
+}
+
+function applyLive(msg) {
+  const { header: h, fired, dead, risk, lvl } = msg;
+  const t = now();
+  if (h.type === "sync") {
+    for (const i of dead) { deadT[i] = 0.001; deadMask[i] = 1; }
+    for (const x of h.history || []) pushHist(x);
+    tests = (h.tests || []).slice(); renderTests();
+    const hist0 = (h.history || [])[0];
+    const last = (h.history || []).slice(-1)[0];
+    if (last) {
+      updateHud(last);
+      if (hist0 && hist0.dead > 0 && !last.first_death) {
+        $("first-death").textContent = "dying before this view opened";
+        $("first-death").dataset.set = "1";
+      } else markFirstDeath(last);
+    }
+    if (h.status && h.status !== "running") setStatus(h.status, h.summary);
+  } else if (h.type === "status") {
+    setStatus(h.status, h.summary);
+    return;
+  } else {
+    for (const i of fired) act[i] = 1;
+    for (const i of dead) { deadT[i] = t; deadMask[i] = 1; }
+    if (risk.length || h.w % 4 === 0) { dmg.fill(0); for (let j = 0; j < risk.length; j++) dmg[risk[j]] = lvl[j] / 255; }
+    pushHist(h); updateHud(h); markFirstDeath(h); rigTelemetry(h, false);
+    $("clock").innerHTML = `<b>window ${fmt(h.w)}</b><br>${h.sec.toFixed(2)} s per window`;
+  }
+  geom.attributes.aDeadT.needsUpdate = true;
+  geom.attributes.aDmg.needsUpdate = true;
+  if (dead.length || h.type === "sync") updatePips();
+  drawCharts();
+}
+
+function setStatus(status, summary) {
+  if (status === "finished") {
+    $("state-pill").textContent = "Finished"; $("state-pill").className = "pill stop";
+    if (summary && summary.stop) $("stop-note").textContent = STOP_TEXT[summary.stop] || summary.stop;
+  } else if (status && status.startsWith("error")) {
+    $("state-pill").textContent = "Rig error"; $("state-pill").className = "pill stop";
+    $("stop-note").textContent = status;
+  } else if (status === "loading") {
+    $("state-pill").textContent = "Starting";
+  }
+}
+
+function connect() {
+  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/stream`);
+  ws.binaryType = "arraybuffer";
+  ws.onmessage = (e) => applyLive(parse(e.data));
+  ws.onclose = () => { $("state-pill").textContent = "Reconnecting"; $("state-pill").className = "pill"; setTimeout(connect, 1500); };
+}
+
+// ---------------------------------------------------------------- replay
+let R = null;               // { index, timeline, act: [Uint8Array chunks], death, deathsAt, dmg: [...] }
+let frame = 0, playing = false, carry = 0, shownDmg = -1;
+
+async function loadReplay(r) {
+  const idx = r.index;
+  const deathB = await bytes("death.bin");
+  const death = new Int32Array(deathB.buffer, deathB.byteOffset, deathB.byteLength >> 2);
+  const deathsAt = Array.from({ length: idx.frames }, () => []);
+  for (let i = 0; i < death.length; i++) if (death[i] >= 0 && death[i] < idx.frames) deathsAt[death[i]].push(i);
+  R = { index: idx, timeline: r.timeline, death, deathsAt, act: [], dmg: [] };
+  const tl = r.timeline;
+  const base = tl.filter((x) => x.phase.startsWith("base-")).map((x) => x.sps);
+  baselineSps = base.length ? base.reduce((a, b) => a + b, 0) / base.length : null;
+  full = { nic: tl.map((x) => x.nic), dead: tl.map((x) => x.dead), sps: tl.map((x) => x.sps) };
+  $("scrub").max = String(tl.length - 1);
+  try {
+    const cfg = await (await fetch(BASE + "config.json")).json();
+    $("cfg").textContent = `Toxicity ${cfg.toxicity}. Starting dose ${cfg.dose} per puff, up ${Math.round((cfg.escalate || 0) * 100)}% every ${cfg.escalate_every || 10} puffs. Nicotine half-life ${cfg.half_life} windows. Cycle of ${cfg.air} air, ${cfg.puff} puff and ${cfg.wash} wash windows. Seed ${cfg.seed}.`;
+  } catch (_) {}
+  drawStrip();
+  // chunks load in the background; a frame whose chunk is not in yet shows no spikes
+  (async () => {
+    for (let c = 0; c < idx.act.length; c++) R.act[c] = await bytes(idx.act[c]);
+    if (!playing) showFrame(frame, true);
+  })();
+  (async () => {
+    for (let c = 0; c < idx.damage.length; c++) R.dmg[c] = await bytes(idx.damage[c]);
+  })();
+  // open playing, from the first frame, on a loop
+  seek(0);
+  setPlaying(true);
+}
+
+function drawStrip() {
+  const c = $("strip"); if (!c || !R) return;
+  const w = c.clientWidth, h = c.clientHeight; if (!w) return;
+  const dpr = Math.min(devicePixelRatio, 2);
+  c.width = w * dpr; c.height = h * dpr;
+  const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const tl = R.timeline, n = tl.length;
+  const X = (i) => (n > 1 ? i / (n - 1) : 0) * (w - 2) + 1;
+  g.fillStyle = css("--panel"); g.strokeStyle = css("--rule");
+  g.beginPath(); g.roundRect(0.5, 0.5, w - 1, h - 1, 8); g.fill(); g.stroke();
+  const maxDead = Math.max(1, ...tl.map((x) => x.new_dead));
+  g.fillStyle = css("--dead");
+  tl.forEach((x, i) => {
+    if (!x.new_dead) return;
+    const bh = Math.max(1.5, Math.sqrt(x.new_dead / maxDead) * (h - 16));
+    g.globalAlpha = 0.75; g.fillRect(X(i) - 0.75, h - 4 - bh, 1.5, bh);
+  });
+  g.globalAlpha = 1;
+  g.fillStyle = css("--nicotine");
+  tl.forEach((x, i) => { if (x.puffing && !x.phase.startsWith("base-")) g.fillRect(X(i) - 0.5, 4, 1, 5); });
+  const base = tl.findIndex((x) => !x.phase.startsWith("base-"));
+  if (base > 0) { g.fillStyle = css("--ink-3"); g.globalAlpha = 0.12; g.fillRect(1, 1, X(base), h - 2); g.globalAlpha = 1; }
+  const x = X(frame);
+  g.fillStyle = css("--ink"); g.fillRect(Math.round(x) - 1, 2, 2, h - 4);
+}
+
+function frameBits(k) {
+  const I = R.index, c = Math.floor(k / I.chunk), chunk = R.act[c];
+  if (!chunk) return null;
+  const off = (k - c * I.chunk) * I.nbytes;
+  return chunk.subarray(off, off + I.nbytes);
+}
+
+function applyDamage(k) {
+  const I = R.index;
+  let j = -1;
+  for (let q = 0; q < I.damage_frames.length; q++) if (I.damage_frames[q] <= k) j = q;
+  if (j === shownDmg) return;
+  const chunk = R.dmg[Math.floor(j / I.damage_chunk)];
+  if (j >= 0 && !chunk) return;
+  shownDmg = j;
+  if (j < 0) dmg.fill(0);
+  else {
+    const off = (j - Math.floor(j / I.damage_chunk) * I.damage_chunk) * N;
+    for (let i = 0; i < N; i++) dmg[i] = chunk[off + i] / 255;
+  }
+  geom.attributes.aDmg.needsUpdate = true;
+}
+
+function showFrame(k, jumped) {
+  const tl = R.timeline, h = tl[k];
+  const t = now();
+  if (jumped) {
+    for (let i = 0; i < N; i++) {
+      const d = R.death[i];
+      const isDead = d >= 0 && d <= k;
+      deadMask[i] = isDead ? 1 : 0;
+      deadT[i] = isDead ? (d === k ? t : 0.001) : 0;
+    }
+    tests = tl.slice(0, k + 1).filter((x) => x.test).map((x) => x.test);
+    $("tests").innerHTML = tests.length ? "" : `<tr><td colspan="4" style="color:var(--ink-3)">first test runs before the first puff</td></tr>`;
+    renderTests();
+    $("first-death").dataset.set = "";
+    $("first-death").textContent = "no deaths yet";
+  } else {
+    for (const i of R.deathsAt[k]) { deadMask[i] = 1; deadT[i] = t; }
+    if (h.test) { tests.push(h.test); renderTests(); }
+  }
+  const bits = frameBits(k);
+  if (bits) for (let b = 0; b < bits.length; b++) {
+    const byte = bits[b]; if (!byte) continue;
+    for (let s = 0; s < 8; s++) if (byte & (128 >> s)) { const i = (b << 3) + s; if (i < N) act[i] = 1; }
+  }
+  applyDamage(k);
+  geom.attributes.aDeadT.needsUpdate = true;
+  hist.w = tl.slice(0, k + 1).map((x) => x.w);
+  hist.nic = full.nic.slice(0, k + 1); hist.dead = full.dead.slice(0, k + 1); hist.sps = full.sps.slice(0, k + 1);
+  // A replay frame is 8 windows and its phase is the last one's, which can never be one of the
+  // 4 puff windows in a 24-window cycle. A frame that contains a puff is shown as the puff.
+  const hv = h.puffing && !/puff$/.test(h.phase || "")
+    ? Object.assign({}, h, { phase: (h.phase || "").startsWith("base-") ? "base-puff" : "puff" }) : h;
+  updateHud(hv);
+  rigTelemetry(hv, jumped);
+  const end = tl[tl.length - 1];
+  if (!h.stop && end && end.stop) $("stop-note").textContent = ENDED_TEXT[end.stop] || "";
+  const first = tl.findIndex((x) => x.dead > 0);
+  if (first >= 0 && first <= k) {
+    const fh = tl[first];
+    $("first-death").textContent = fh.puffs ? `first died after ${fh.puffs} puffs` : "first died in baseline";
+  }
+  updatePips(); drawCharts(); drawStrip();
+  $("scrub").value = String(k);
+  const every = R.index.stride > 1 ? ` \u00b7 1 window in ${R.index.stride}` : "";
+  $("clock").innerHTML = `<b>window ${fmt(h.w)}</b><br>frame ${k + 1} of ${tl.length}${every}`;
+  if (!h.stop) { $("state-pill").textContent = playing ? "Replaying" : "Paused"; $("state-pill").className = "pill"; }
+}
+
+function seek(k) { frame = Math.max(0, Math.min(R.timeline.length - 1, k)); showFrame(frame, true); }
+
+function tickReplay(dt) {
+  if (!R || !playing) return;
+  carry += dt * 6 * +$("speed").value;
+  let stepped = false;
+  while (carry >= 1) {
+    carry -= 1;
+    if (frame >= R.timeline.length - 1) {
+      if (looping) { seek(0); stepped = true; continue; }
+      setPlaying(false); break;
+    }
+    frame++; showFrame(frame, false); stepped = true;
+  }
+  return stepped;
+}
+
+function setPlaying(p) {
+  playing = p;
+  $("play").textContent = p ? "Pause" : (frame >= (R ? R.timeline.length - 1 : 0) ? "Replay" : "Play");
+  $("play").setAttribute("aria-label", p ? "Pause" : "Play");
+  if (R && !R.timeline[frame].stop) { $("state-pill").textContent = p ? "Replaying" : "Paused"; }
+}
+$("play").addEventListener("click", () => {
+  if (!R) return;
+  if (!playing && frame >= R.timeline.length - 1) seek(0);
+  setPlaying(!playing);
+});
+$("scrub").addEventListener("input", (e) => { if (R) { seek(+e.target.value); } });
+let looping = true;
+$("loop").addEventListener("click", () => {
+  looping = !looping;
+  $("loop").setAttribute("aria-pressed", String(looping));
+});
+addEventListener("keydown", (e) => {
+  if (e.code === "Space" && MODE === "replay" && e.target.tagName !== "INPUT" && e.target.tagName !== "SELECT" && e.target.tagName !== "BUTTON") {
+    e.preventDefault(); $("play").click();
+  }
+});
+
+// ---------------------------------------------------------------- boot
+async function boot() {
+  try {
+    let replayJson = null;
+    if (MODE === "replay") {
+      replayJson = await (await fetch(BASE + "replay.json")).json();
+      ENC = replayJson.index.encoding || null;
+    }
+    meta = await (await fetch(BASE + "neurons.json")).json();
+    groups = meta.groups; N = meta.n;
+    const [xyzB, mb] = await Promise.all([bytes("neurons.bin"), bytes("neurons_meta.bin")]);
+    const xyz = new Float32Array(xyzB.buffer, xyzB.byteOffset, xyzB.byteLength >> 2);
+    buildGeometry(xyz, mb);
+    buildPips();
+    loadModels();
+    const pc = meta.placed_counts || {};
+    $("scale").innerHTML = `<b>Male CNS v1.0</b>${fmt((pc.soma || 0) + (pc.tosoma || 0))} measured cell bodies<br>${fmt(pc.partner_centroid || 0)} placed by their connections<br>drag to turn &middot; scroll to zoom`;
+    $("loading").hidden = true;
+    resize();
+    requestAnimationFrame(render);
+    if (MODE === "live") {
+      $("play").hidden = true; $("speed").hidden = true; $("loop").hidden = true;
+      document.querySelector(".scrub").innerHTML = `<span class="live-pill">LIVE</span>`;
+      document.querySelector(".scrub").style.cssText = "display:flex;align-items:center;height:40px";
+      try {
+        const cfgText = await (await fetch("state")).json();
+        if (cfgText.summary && cfgText.summary.config) {
+          const cfg = cfgText.summary.config;
+          $("cfg").textContent = `toxicity ${cfg.toxicity}, dose ${cfg.dose} per puff.`;
+        }
+      } catch (_) {}
+      connect();
+    } else {
+      await loadReplay(replayJson);
+    }
+  } catch (err) {
+    $("loading").hidden = false;
+    $("loading").textContent = MODE === "live"
+      ? "Could not reach the rig. Start it with: python vape_server.py"
+      : "No recorded run found next to this page. Run vape_rig.py to record one.";
+    console.error(err);
+  }
+}
+boot();
+</script>
