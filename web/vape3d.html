@@ -14,6 +14,7 @@
   --amber: #ffb14e;
   --pi: #ff4a55;
   --ash: #6b4a52;
+  --card-field: #0a0e15;
   /* the rig log: slide glass */
   --ground: #e9edf2;
   --panel: #f7f9fb;
@@ -133,6 +134,17 @@ select.region option { color: #111; }
 .rig-label { position: absolute; left: 0; top: 0; font: 400 9.5px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--field-dim); white-space: nowrap; will-change: transform; }
 .rig-label::before { content: ""; position: absolute; left: -8px; top: 50%; width: 4px; height: 4px; margin-top: -2px; border-radius: 50%; background: currentColor; }
 .rig-label.hot { color: #e0b64a; }
+.rig-label.in-card::before { display: none; }
+
+/* the nervous system in its own card, drawn by a second camera into this rectangle of the canvas */
+.brain-card { position: absolute; top: 18px; right: 16px; bottom: 58px; width: clamp(200px, 30%, 440px); display: flex; flex-direction: column; border: 1px solid #1d2432; border-radius: 12px; overflow: hidden; pointer-events: none; }
+.bc-head, .bc-foot { flex: none; background: var(--card-field); padding: 9px 12px; }
+.bc-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; border-bottom: 1px solid #161c28; font: 500 10px/1.2 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--field-ink); }
+.bc-head span:last-child { font-weight: 400; letter-spacing: 0.04em; text-transform: none; color: var(--field-dim); text-align: right; }
+.bc-body { flex: 1; min-height: 0; pointer-events: auto; cursor: grab; touch-action: none; }
+.bc-body:active { cursor: grabbing; }
+.bc-foot { border-top: 1px solid #161c28; font: 400 9.5px/1.45 var(--mono); letter-spacing: 0.03em; color: var(--field-dim); font-variant-numeric: tabular-nums; }
+.bc-foot b { font-weight: 500; color: var(--field-ink); }
 .sw.rig { background: transparent; border: 1.5px solid var(--field-ink); box-shadow: none; }
 .loading { position: absolute; inset: 0; display: grid; place-items: center; font: 400 12px var(--mono); color: var(--field-dim); letter-spacing: 0.06em; pointer-events: none; }
 
@@ -216,7 +228,10 @@ details dd { margin: 2px 0 0; max-width: 62ch; }
 }
 @media (max-width: 560px) {
   .field-head h1 { font-size: 34px; }
-  .scale { display: none; }
+  .field { height: 88vh; }
+  .brain-card { top: auto; left: 12px; right: 12px; width: auto; bottom: 92px; height: 38%; }
+  .bc-foot { display: none; }
+  .rig-label:not(.hot) { display: none; }
   .transport { grid-template-columns: auto minmax(0, 1fr); }
   .transport .speed, .transport #loop { display: none; }
   .transport .clock { grid-column: 1 / -1; text-align: left; }
@@ -230,8 +245,13 @@ details dd { margin: 2px 0 0; max-width: 62ch; }
 <script>window.FLYVAPE_MODE = "replay";</script>
 
 <div class="app">
-  <section class="field" aria-label="3D view of the fly's central nervous system">
+  <section class="field" aria-label="3D view of the vape rig and the fly's nervous system">
     <canvas id="gl"></canvas>
+    <aside class="brain-card" id="brain-card" aria-label="The fly's nervous system">
+      <div class="bc-head"><span>Nervous system</span><span>drag to turn</span></div>
+      <div class="bc-body" id="brain-body"></div>
+      <div class="bc-foot" id="scale"><b>Male CNS v1.0</b><br>165,122 neurons</div>
+    </aside>
     <div class="rig-labels" id="rig-labels" aria-hidden="true"></div>
     <div class="field-head">
       <div>
@@ -241,7 +261,6 @@ details dd { margin: 2px 0 0; max-width: 62ch; }
           <span data-ph="air">AIR</span><span data-ph="puff" class="puff">PUFF</span><span data-ph="wash">WASH</span>
         </div>
       </div>
-      <div class="scale" id="scale"><b>Male CNS v1.0</b>brain above, nerve cord below<br>drag to turn &middot; scroll to zoom</div>
     </div>
     <div class="controls">
       <div class="group" role="group" aria-label="Channels">
@@ -472,6 +491,61 @@ const material = new THREE.ShaderMaterial({
     }`,
 });
 
+// ---------------------------------------------------------------- the nervous system card
+// A second scene and camera, drawn into the card's rectangle of the same canvas (one WebGL context, one geometry).
+const brainScene = new THREE.Scene();
+const brainView = new THREE.Group();
+brainScene.add(brainView);
+const cardCam = new THREE.PerspectiveCamera(34, 0.6, 0.01, 50);
+cardCam.position.set(0, 0, 4);
+const cardControls = new OrbitControls(cardCam, $("brain-body"));
+cardControls.enableDamping = true;
+cardControls.dampingFactor = 0.08;
+cardControls.enablePan = false;
+const CARD_BG = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue("--card-field").trim() || "#0a0e15");
+const FIELD_BG = new THREE.Color(0x000000);
+const card = { x: 0, y: 0, top: 0, w: 0, h: 0, fit: 0 };
+let neuronPoints = null, brainFit = null, pointBoost = 1;
+function layoutCard() {
+  const cr = canvas.getBoundingClientRect(), br = $("brain-body").getBoundingClientRect();
+  card.x = br.left - cr.left; card.top = br.top - cr.top; card.w = br.width; card.h = br.height;
+  card.y = cr.height - card.top - card.h;          // GL counts from the bottom
+  if (card.w < 2 || card.h < 2) return;
+  cardCam.aspect = card.w / card.h;
+  if (brainFit) {
+    // face-on, the long axis (brain to nerve cord) is the height and the optic lobes the width
+    const tan2 = 2 * Math.tan(THREE.MathUtils.degToRad(cardCam.fov / 2));
+    const fit = Math.max(brainFit.size.x, brainFit.size.z / cardCam.aspect) / tan2 * 1.08;
+    if (Math.abs(fit - card.fit) > 1e-9) {
+      cardCam.position.setLength(fit);
+      card.fit = fit;
+      cardCam.near = fit * 0.01; cardCam.far = fit * 10;
+      cardControls.minDistance = fit * 0.35; cardControls.maxDistance = fit * 2.5;
+    }
+  }
+  cardCam.updateProjectionMatrix();
+  pointBoost = Math.max(0.28, Math.min(0.8, card.h / 1000));
+  uniforms.uSize.value = 4.2 * pointBoost;
+}
+new ResizeObserver(layoutCard).observe($("brain-body"));
+function setupBrainCard(pos, vis) {
+  // measure the placed neurons only (hidden ones are parked at the origin)
+  const lo = new THREE.Vector3(Infinity, Infinity, Infinity), hi = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+  const q = new THREE.Vector3();
+  for (let i = 0; i < vis.length; i++) if (vis[i] > 0) { q.set(pos[3 * i], pos[3 * i + 1], pos[3 * i + 2]); lo.min(q); hi.max(q); }
+  brainFit = { lo, hi, center: lo.clone().add(hi).multiplyScalar(0.5), size: hi.clone().sub(lo) };
+  neuronPoints.position.copy(brainFit.center).multiplyScalar(-1);
+  brainView.add(neuronPoints);
+  // face-on: the long axis runs down the card (brain on top), the optic lobes spread left and right
+  brainView.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(
+    new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, -1), new THREE.Vector3(1, 0, 0)));
+  brainView.updateMatrixWorld(true);
+  card.fit = 0;
+  layoutCard();
+}
+// a point in the neurons' own coordinates, in the card scene
+function brainPoint(p) { return neuronPoints.localToWorld(p.clone()); }
+
 function resize() {
   const r = canvas.getBoundingClientRect();
   renderer.setSize(r.width, r.height, false);
@@ -479,6 +553,7 @@ function resize() {
   camera.updateProjectionMatrix();
   drawCharts();
   drawStrip();
+  layoutCard();
   if (rig.ready && !rig.userMoved && !rig.cam && r.width > 0 && r.height > 0) frameRig(rig.view);
 }
 new ResizeObserver(resize).observe(canvas);
@@ -523,8 +598,8 @@ function buildGeometry(xyz, metaBin) {
   geom.setAttribute("aVis", new THREE.BufferAttribute(vis, 1));
   const pts = new THREE.Points(geom, material);
   pts.frustumCulled = false;
-  scene.add(pts);
   neuronPoints = pts;
+  setupBrainCard(pos, vis);
   buildRig(anchorsFrom(pos, sc, placed));
 }
 
@@ -563,7 +638,20 @@ function render(t) {
   }
   rigUpdate(dt);
   controls.update();
+  cardControls.update();
+  renderer.setScissorTest(false);
+  renderer.setClearColor(FIELD_BG, 1);
   renderer.render(scene, camera);
+  if (card.w > 1 && card.h > 1) {
+    renderer.setScissorTest(true);
+    renderer.setScissor(card.x, card.y, card.w, card.h);
+    renderer.setViewport(card.x, card.y, card.w, card.h);
+    renderer.setClearColor(CARD_BG, 1);
+    renderer.render(brainScene, cardCam);
+    renderer.setScissorTest(false);
+    const size = renderer.getSize(new THREE.Vector2());
+    renderer.setViewport(0, 0, size.x, size.y);
+  }
   requestAnimationFrame(render);
 }
 
@@ -602,12 +690,12 @@ function tube(a, b, rA, rB, hex, s) {
   m.quaternion.setFromUnitVectors(AX_Y, d.normalize());
   return m;
 }
-function addLabel(text, anchor, cls) {
+function addLabel(text, anchor, cls, inCard = false) {
   const el = document.createElement("span");
-  el.className = "rig-label" + (cls ? " " + cls : "");
+  el.className = "rig-label" + (cls ? " " + cls : "") + (inCard ? " in-card" : "");
   el.textContent = text;
   $("rig-labels").appendChild(el);
-  rig.labels.push({ el, anchor });
+  rig.labels.push({ el, anchor, card: inCard });
   return el;
 }
 function setRigVisible(on) { rig.group.visible = on; $("rig-labels").hidden = !on; }
@@ -769,11 +857,13 @@ function buildRig(A) {
   addLabel("odour nozzle", rig.nozzleLabel);
   rig.antennaLabel = antenna.clone().add(V3(0, headR.x * 0.8, 0));
   addLabel("antenna", rig.antennaLabel);
-  rig.antenna = antenna; rig.kc = A.kc.clone(); rig.optic = A.optic;
+  rig.antenna = antenna; rig.kc = brainPoint(A.kc); rig.optic = A.optic;
   rig.ballC = ballC; rig.R = R; rig.thR = thR;
   rig.kcLocal = A.kc.clone();
-  rig.daAnchor = A.kc.clone().add(V3(0, headR.y * 1.1, 0));
-  rig.daLabel = addLabel("dopamine reward", rig.daAnchor, "hot");
+  // the dopamine pulse and its label sit on the mushroom body in the nervous-system card
+  rig.daAnchor = rig.kc.clone().add(V3(0, brainFit.size.x * 0.1, 0));
+  rig.pulseSize = brainFit.size.z * 0.08;
+  rig.daLabel = addLabel("dopamine reward", rig.daAnchor, "hot", true);
   rig.daLabel.hidden = true;
 
   frameRig();
@@ -940,27 +1030,40 @@ const SIDE_DIR = V3(0, 0.2, 1).normalize();   // straight across the rig, a litt
 function frameRig(mode = rig.view || "side", animate = false) {
   rig.view = mode;
   const parts = mode === "rig"
-    ? [rig.flyModel || rig.body, rig.tether, (rig.pad ? rig.pad.group : rig.ballG), rig.vape && rig.vape.group, rig.tubeMesh, rig.nozzleMesh, rig.stand && rig.stand.visible ? rig.stand : null, brainView]
+    ? [rig.flyModel || rig.body, rig.tether, (rig.pad ? rig.pad.group : rig.ballG), rig.vape && rig.vape.group, rig.tubeMesh, rig.nozzleMesh, rig.stand && rig.stand.visible ? rig.stand : null]
     : mode === "side"
-      ? [rig.flyModel || rig.body, (rig.pad ? rig.pad.group : rig.ballG), rig.vape && rig.vape.group, rig.nozzleMesh, brainView]
+      ? [rig.flyModel || rig.body, (rig.pad ? rig.pad.group : rig.ballG), rig.vape && rig.vape.group, rig.nozzleMesh]
       : [rig.flyModel || rig.body];
   const box = new THREE.Box3();
   for (const part of parts) if (part) box.expandByObject(part);
   if (box.isEmpty()) return;
   const size = box.getSize(V3()), center = box.getCenter(V3());
-  const r = canvas.getBoundingClientRect(), aspect = r.width / Math.max(1, r.height);
+  const r = canvas.getBoundingClientRect();
+  // fit the rig in the space the nervous-system card leaves free: left of it on wide screens, above it on phones
+  const cb = $("brain-card").getBoundingClientRect();
+  let ax = 0, ay = 0, aw = r.width, ah = r.height;
+  if (cb.width > 0 && cb.width > r.width * 0.6) {
+    ay = Math.max(0, document.querySelector(".field-head").getBoundingClientRect().bottom - r.top + 4);
+    ah = Math.max(60, cb.top - r.top - 8 - ay);
+  } else if (cb.width > 0) {
+    aw = Math.max(120, cb.left - r.left - 8);
+  }
+  const aspect = aw / ah, hk = r.height / Math.max(1, ah);
   const tan2 = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
   let dist;
   if (mode === "side") {
-    dist = Math.max(size.x / aspect, size.y) / tan2 * 1.55;
+    dist = Math.max(size.x / aspect, size.y) * hk / tan2 * 1.3;
     center.y -= size.y * 0.1;
   } else {
-    dist = Math.max(size.x / aspect, size.y, size.z * 0.6) / tan2 * (mode === "rig" ? 1.1 : 2.6);
+    dist = Math.max(size.x / aspect, size.y, size.z * 0.6) * hk / tan2 * (mode === "rig" ? 1.1 : 2.6);
   }
   rig.userMoved = false;
   const away = camera.position.clone().sub(controls.target);
   const dir = mode === "side" ? SIDE_DIR.clone()
     : animate && away.lengthSq() > 1e-12 ? away.normalize() : V3(-0.5, 0.32, 1).normalize();
+  const right = V3().crossVectors(camera.up, dir).normalize(), up = V3().crossVectors(dir, right);
+  const wpp = dist * tan2 / Math.max(1, r.height);
+  center.addScaledVector(right, (r.width / 2 - (ax + aw / 2)) * wpp).addScaledVector(up, (ay + ah / 2 - r.height / 2) * wpp);
   const pos = center.clone().add(dir.multiplyScalar(dist));
   camera.near = dist * 0.002; camera.far = dist * 60; camera.updateProjectionMatrix();
   controls.minDistance = dist * 0.05; controls.maxDistance = dist * 8;
@@ -999,10 +1102,9 @@ function scaleRig(F) {
   rig.fit = { mm, face: F.face, tip, base, floorY: bc2.y - R2 * 1.35, vH0: rig.fit ? rig.fit.vH0 : rig.vH, top: rig.vape.top, optZ: F.optZ, flyLen: F.flyLen };
   applyVapeScale("same");
   rig.antenna = F.face;
-  rig.nozzleLabel.copy(base.clone().lerp(tip, 0.3).add(V3(0, -2 * mm, 0)));
+  rig.nozzleLabel.copy(base.clone().lerp(tip, 0.3).add(V3(0, 1.8 * mm, 0)));
   rig.antennaLabel.copy(F.face.clone().add(V3(0, 1.2 * mm, 0)));
   rig.vapor.material.uniforms.uScale.value = 0.3 * F.flyLen;
-  placeBrainView(F.flyLen);
   frameRig("side");
 }
 
@@ -1204,62 +1306,10 @@ async function loadFlyBody() {
   addCredit(NMF.credit);
 }
 
-// ---------------------------------------------------------------- the nervous system, enlarged beside the fly
-let neuronPoints = null, brainView = null, pointBoost = 1;
-function placeBrainView(flyLen) {
-  if (!neuronPoints || !rig.ready) return;
-  if (!brainView) {
-    brainView = new THREE.Group();
-    scene.add(brainView);
-    scene.remove(neuronPoints);
-    brainView.add(neuronPoints);
-    // measure the placed neurons only (hidden ones are parked at the origin)
-    const p = neuronPoints.geometry.attributes.position.array, v = neuronPoints.geometry.attributes.aVis.array;
-    const lo = V3(Infinity, Infinity, Infinity), hi = V3(-Infinity, -Infinity, -Infinity);
-    for (let i = 0; i < v.length; i++) if (v[i] > 0) {
-      lo.min(_v.set(p[3 * i], p[3 * i + 1], p[3 * i + 2])); hi.max(_v);
-    }
-    rig.brainLo = lo; rig.brainHi = hi;
-    rig.brainCenter = lo.clone().add(hi).multiplyScalar(0.5);
-    rig.brainSize = hi.clone().sub(lo);
-    neuronPoints.position.copy(rig.brainCenter).multiplyScalar(-1);
-    // face-on: the long axis runs down the screen (brain on top), the optic lobes spread left and right
-    brainView.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(V3(0, -1, 0), V3(0, 0, -1), V3(1, 0, 0)));
-    rig.connector = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V3(), V3()]),
-      new THREE.LineDashedMaterial({ color: 0x6f7c93, dashSize: 1, gapSize: 1, transparent: true, opacity: 0.7, depthTest: false }));
-    rig.connector.frustumCulled = false;
-    scene.add(rig.connector);
-    rig.brainLabel = V3();
-    addLabel("nervous system, enlarged", rig.brainLabel);
-  }
-  const flyBox = new THREE.Box3().expandByObject(rig.flyModel || rig.body);
-  if (rig.pad) flyBox.union(new THREE.Box3().setFromObject(rig.pad.group));
-  const height = (flyBox.max.y - flyBox.min.y) * 1.0;
-  const k = height / Math.max(1e-6, rig.brainSize.x);  // the long axis (brain to nerve cord) becomes the height
-  brainView.scale.setScalar(k);
-  brainView.position.set(flyBox.max.x + flyLen * 0.45 + rig.brainSize.z * k / 2,
-    (flyBox.min.y + flyBox.max.y) / 2, (flyBox.min.z + flyBox.max.z) / 2);
-  brainView.updateMatrixWorld(true);
-  pointBoost = Math.max(1, Math.min(2.4, k / 2.2));
-  setFocus(0);
-  // the dopamine pulse and its label follow the mushroom body to its enlarged place
-  rig.kc.copy(neuronPoints.localToWorld(rig.kcLocal.clone()));
-  rig.daAnchor.copy(rig.kc).add(V3(0, height * 0.12, 0));
-  rig.pulseSize = rig.brainSize.z * k * 0.08;
-  // dashed line from the fly's head to the front of the brain
-  const front = neuronPoints.localToWorld(V3(rig.brainLo.x, rig.brainCenter.y, rig.brainCenter.z));
-  const head = rig.optic ? rig.optic.mid.clone() : front.clone();
-  const a = rig.connector.geometry.attributes.position;
-  a.setXYZ(0, head.x, head.y, head.z); a.setXYZ(1, front.x, front.y, front.z); a.needsUpdate = true;
-  rig.connector.computeLineDistances();
-  rig.connector.material.dashSize = rig.connector.material.gapSize = flyLen * 0.05;
-  rig.brainLabel.copy(front).add(V3(0, height * 0.06, 0));
-}
-
 function firePulse() {
   if (!rig.ready) return;
   const m = new THREE.Mesh(new THREE.RingGeometry(0.86, 1, 64), glowMat(0xe0b64a, 0.9));
-  m.position.copy(rig.kc); rig.group.add(m);
+  m.position.copy(rig.kc); brainScene.add(m);
   rig.dopaBurst = 1;
   rig.pulses.push({ mesh: m, t0: now() });
 }
@@ -1390,9 +1440,9 @@ function rigUpdate(dt) {
 
   for (let j = rig.pulses.length - 1; j >= 0; j--) {
     const p = rig.pulses[j], age = (t - p.t0) / 1.2;
-    if (age >= 1) { rig.group.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); rig.pulses.splice(j, 1); continue; }
+    if (age >= 1) { brainScene.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); rig.pulses.splice(j, 1); continue; }
     const sz = (rig.pulseSize || rig.thR.z) * (0.2 + 1.6 * age);
-    p.mesh.scale.set(sz, sz, sz); p.mesh.material.opacity = 0.9 * (1 - age); p.mesh.quaternion.copy(camera.quaternion);
+    p.mesh.scale.set(sz, sz, sz); p.mesh.material.opacity = 0.9 * (1 - age); p.mesh.quaternion.copy(cardCam.quaternion);
   }
   rig.daLabel.hidden = !rig.pulses.length;
 
@@ -1400,9 +1450,13 @@ function rigUpdate(dt) {
     const r = canvas.getBoundingClientRect();
     for (const L of rig.labels) {
       if (L.el.hidden) continue;
-      _v.copy(L.anchor).project(camera);
+      _v.copy(L.anchor).project(L.card ? cardCam : camera);
       L.el.style.opacity = _v.z > -1 && _v.z < 1 ? "" : "0";
-      L.el.style.transform = `translate(${((_v.x + 1) / 2 * r.width + 8).toFixed(1)}px, ${((1 - _v.y) / 2 * r.height).toFixed(1)}px) translateY(-50%)`;
+      if (L.card) {
+        L.el.style.transform = `translate(${(card.x + (_v.x + 1) / 2 * card.w).toFixed(1)}px, ${(card.top + (1 - _v.y) / 2 * card.h).toFixed(1)}px) translate(-50%, -100%)`;
+      } else {
+        L.el.style.transform = `translate(${((_v.x + 1) / 2 * r.width + 8).toFixed(1)}px, ${((1 - _v.y) / 2 * r.height).toFixed(1)}px) translateY(-50%)`;
+      }
     }
   }
 }
@@ -1816,7 +1870,7 @@ async function boot() {
     buildPips();
     loadModels();
     const pc = meta.placed_counts || {};
-    $("scale").innerHTML = `<b>Male CNS v1.0</b>${fmt((pc.soma || 0) + (pc.tosoma || 0))} measured cell bodies<br>${fmt(pc.partner_centroid || 0)} placed by their connections<br>drag to turn &middot; scroll to zoom`;
+    $("scale").innerHTML = `<b>Male CNS v1.0</b><br>${fmt((pc.soma || 0) + (pc.tosoma || 0))} measured cell bodies<br>${fmt(pc.partner_centroid || 0)} placed by their connections`;
     $("loading").hidden = true;
     resize();
     requestAnimationFrame(render);
