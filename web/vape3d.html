@@ -134,6 +134,7 @@ select.region option { color: #111; }
 .rig-label { position: absolute; left: 0; top: 0; font: 400 9.5px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--field-dim); white-space: nowrap; will-change: transform; }
 .rig-label::before { content: ""; position: absolute; left: -8px; top: 50%; width: 4px; height: 4px; margin-top: -2px; border-radius: 50%; background: currentColor; }
 .rig-label.hot { color: #e0b64a; }
+.rig-label.in-card { padding: 3px 6px; border-radius: 4px; background: rgba(10, 14, 21, 0.85); }
 .rig-label.in-card::before { display: none; }
 
 /* the nervous system in its own card, drawn by a second camera into this rectangle of the canvas */
@@ -861,7 +862,7 @@ function buildRig(A) {
   rig.ballC = ballC; rig.R = R; rig.thR = thR;
   rig.kcLocal = A.kc.clone();
   // the dopamine pulse and its label sit on the mushroom body in the nervous-system card
-  rig.daAnchor = rig.kc.clone().add(V3(0, brainFit.size.x * 0.1, 0));
+  rig.daAnchor = V3(rig.kc.x, brainFit.size.x * 0.54, rig.kc.z);   // just above the top of the brain, over the mushroom body
   rig.pulseSize = brainFit.size.z * 0.08;
   rig.daLabel = addLabel("dopamine reward", rig.daAnchor, "hot", true);
   rig.daLabel.hidden = true;
