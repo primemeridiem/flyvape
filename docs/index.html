@@ -1266,7 +1266,7 @@ function placeBrainView(flyLen) {
   }
   const flyBox = new THREE.Box3().expandByObject(rig.flyModel || rig.body);
   if (rig.pad) flyBox.union(new THREE.Box3().setFromObject(rig.pad.group));
-  const height = (flyBox.max.y - flyBox.min.y) * 1.6;
+  const height = (flyBox.max.y - flyBox.min.y) * 1.0;
   const k = height / Math.max(1e-6, rig.brainSize.x);  // the long axis (brain to nerve cord) becomes the height
   brainView.scale.setScalar(k);
   brainView.position.set(flyBox.max.x + flyLen * 0.45 + rig.brainSize.z * k / 2,
